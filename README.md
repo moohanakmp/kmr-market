@@ -139,7 +139,7 @@ this starter uses Neon instead. Keep DB and service regions close.
 2. Create Neon Free project. Obtain hostname, database, username and password.
    Use the **direct/unpooled** endpoint for this small connection pool and Flyway.
    Construct JDBC URL without credentials:
-   `jdbc:postgresql://YOUR_HOST/neondb?sslmode=verify-full`.
+   `jdbc:postgresql://YOUR_HOST/neondb?sslmode=verify-full&sslfactory=org.postgresql.ssl.DefaultJavaSSLFactory`.
    Do not paste `postgresql://user:password@...` into JDBC_DATABASE_URL.
 3. In Render, create a Blueprint connected to this repository (`render.yaml`) or
    create a Docker web service manually. Choose Free, root Dockerfile, health path
@@ -147,7 +147,7 @@ this starter uses Neon instead. Keep DB and service regions close.
 4. Set Render environment variables: `JDBC_DATABASE_URL`, `DB_USERNAME`,
    `DB_PASSWORD`, `ADMIN_USERNAME`, `ADMIN_PASSWORD` (16+ characters).
    PORT is supplied by Render. Never put secrets in frontend code or Git.
-5. Initial deploy can be performed from Render. Open the HTTPS service URL.
+   Set `DB_SCHEMA=kmr`. In Neon SQL Editor, run as the database owner:\n\n   ```sql\n   CREATE SCHEMA IF NOT EXISTS kmr AUTHORIZATION kmr_user;\n   GRANT USAGE, CREATE ON SCHEMA kmr TO kmr_user;\n   ```\n\n   Substitute your actual DB username. KMR tables and Flyway history use this schema;\n   existing public objects are preserved. For a previously working deployment that\n   already stores KMR tables in public, leave DB_SCHEMA unset or use public to\n   preserve access to existing data. Do not change an existing app schema blindly.\n5. Initial deploy can be performed from Render. Open the HTTPS service URL.
 6. Copy the secret deploy-hook URL from Render service Settings. In GitHub, create
    environment `production` and environment secret `RENDER_DEPLOY_HOOK_URL`.
    Do not add required manual reviewers if you want fully automatic deployment.

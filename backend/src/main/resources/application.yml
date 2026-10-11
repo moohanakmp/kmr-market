@@ -11,8 +11,14 @@ spring:
       maximum-pool-size: 3
       minimum-idle: 0
       connection-timeout: 30000
+  flyway:
+    default-schema: ${DB_SCHEMA:public}
+    schemas: ${DB_SCHEMA:public}
   jpa:
     open-in-view: false
+    properties:
+      hibernate:
+        default_schema: ${DB_SCHEMA:public}
     hibernate:
       ddl-auto: validate
 management:

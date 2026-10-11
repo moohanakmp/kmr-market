@@ -8,6 +8,8 @@ services:
     envVars:
       - key: JDBC_DATABASE_URL
         sync: false
+      - key: DB_SCHEMA
+        value: kmr
       - key: DB_USERNAME
         sync: false
       - key: DB_PASSWORD
