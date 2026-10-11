@@ -23,6 +23,9 @@ class FeedSecurityTest {
   mvc.perform(get("/api/signals").with(httpBasic("mt5_feed","1234567"))).andExpect(status().isForbidden());
  }
  @Test void feedCannotPostEmptyQuoteBatch() throws Exception {mvc.perform(post("/api/feed/quotes").with(httpBasic("mt5_feed","1234567")).contentType("application/json").content("{\"quotes\":[]}")).andExpect(status().isBadRequest());}
- @Test void tenCharacterAdminCanReadSignals() throws Exception {mvc.perform(get("/api/signals").with(httpBasic("kalai","1234567890"))).andExpect(status().isOk());}
+ @Test void tenCharacterAdminCanReadSignals() throws Exception {
+  when(signals.findAll(org.mockito.ArgumentMatchers.any(org.springframework.data.domain.Pageable.class))).thenReturn(org.springframework.data.domain.Page.empty());
+  mvc.perform(get("/api/signals").with(httpBasic("kalai","1234567890"))).andExpect(status().isOk());
+ }
  @Test void anonymousFeedDenied() throws Exception {mvc.perform(get("/api/feed/symbols")).andExpect(status().isUnauthorized());}
 }
