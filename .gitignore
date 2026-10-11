@@ -7,3 +7,8 @@ target/
 .vscode/
 
 backups/
+
+.venv-mt5/
+__pycache__/
+*.pyc
+bridge/symbol-map.json

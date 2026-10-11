@@ -3,3 +3,6 @@
 **/target
 **/dist
 .env
+
+**/.venv-mt5
+**/__pycache__

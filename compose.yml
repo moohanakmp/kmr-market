@@ -24,6 +24,7 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-kalai}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+      MT5_FEED_PASSWORD: ${MT5_FEED_PASSWORD:-}
     depends_on:
       db:
         condition: service_healthy

@@ -1,11 +1,10 @@
 # KMR Market 1.0
 
-Java 21 / Spring Boot 3.5.6, React 19 / TypeScript / Vite, PostgreSQL 17.
+Java 21 / Spring Boot 3.5.6, React 19 / TypeScript / Vite, PostgreSQL 17/18.
 Personal, single-admin starter: watchlist CRUD, manual trade-plan CRUD, price validation,
 reward/risk display, database migrations, responsive UI, health endpoint and CI/CD.
-This is a new starter, not a migration of the previous KMR scanner. No live quotes,
-broker orders, automatic signals, backtesting, P&L calculation or scheduled scanner
-are implemented. Redis and Kubernetes/Devtron are unnecessary for this first version.
+This is a new starter, not a migration of the previous KMR scanner. Live quotes and automatic signals are supplied by the Windows MT5 bridge.
+Broker orders, backtesting and P&L accounting are not implemented. Redis and Kubernetes/Devtron are unnecessary for this first version.
 
 ## Architecture
 
@@ -208,6 +207,6 @@ will not automatically reverse DB migrations.
 External integrations: introduce server-side provider interfaces, timeouts, retry
 policy and provider-specific credentials as environment secrets. Select the broker
 and supported API before implementing execution. MT5 terminal bridging requires a
-running terminal/bridge; it is not supplied here. Start with demo-account execution,
+running Windows terminal/bridge; see AUTO_SIGNALS.md for the supplied bridge. Start with demo-account execution,
 idempotent order submission, reconciliation, limits and an explicit kill switch.
 Do not use free-tier sleep-prone hosting for unattended live orders.
