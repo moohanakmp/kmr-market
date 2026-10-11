@@ -67,6 +67,8 @@ admin='Basic '+base64.b64encode(b'kalai:ci-admin-password-long').decode()
 def api(path,data=None,auth=feed):
  req=urllib.request.Request('http://localhost:8080/api'+path,data=None if data is None else json.dumps(data).encode(),headers={'Authorization':auth,'Content-Type':'application/json'})
  with urllib.request.urlopen(req) as res:return json.load(res)
+server_time=datetime.fromisoformat(api('/feed/time')['serverTime'].replace('Z','+00:00'))
+assert abs((server_time-datetime.now(timezone.utc)).total_seconds()) < 10
 assert api('/feed/candles',payload)['status']=='SCANNED'
 assert api('/feed/candles',payload)['status']=='UNCHANGED'
 signals=api('/signals',auth=admin)
@@ -75,6 +77,9 @@ s=signals[0]
 # Bad future candle or stale quote cannot create a new setup.
 bad=dict(payload,quote=dict(q,time=iso(now-timedelta(seconds=100))))
 try:api('/feed/candles',bad);raise AssertionError('stale quote accepted')
+except urllib.error.HTTPError as e:assert e.code==400
+future=dict(payload,quote=dict(q,time=iso(now+timedelta(seconds=120))))
+try:api('/feed/candles',future);raise AssertionError('future quote accepted')
 except urllib.error.HTTPError as e:assert e.code==400
 # Feed principal cannot use admin endpoints.
 try:api('/signals');raise AssertionError('feed could read admin API')

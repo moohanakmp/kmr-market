@@ -2,6 +2,7 @@
 import argparse
 import getpass
 import json
+import math
 import os
 import sys
 import time
@@ -35,6 +36,52 @@ def request(session, base, method, path, payload=None):
         raise RuntimeError(f"API status {res.status_code}: {message[:200]}")
     return res.json()
 
+class ServerClock:
+    """Estimate server UTC from an authenticated response and monotonic elapsed time."""
+    def __init__(self):
+        self.anchor = None
+        self.epoch = None
+
+    def sync(self, session, base):
+        # A free-tier cold start can delay the first response. Resample once awake.
+        for _ in range(3):
+            start = time.monotonic()
+            data = request(session, base, "GET", "/api/feed/time")
+            end = time.monotonic()
+            stamp = datetime.fromisoformat(data["serverTime"].replace("Z", "+00:00"))
+            if stamp.utcoffset() is None:
+                raise RuntimeError("KMR server time must include a UTC offset.")
+            if end - start <= 10:
+                self.epoch = stamp.timestamp() + (end - start) / 2
+                self.anchor = end
+                return
+        raise RuntimeError("Server time requests are too slow to safely check quote freshness. Retry after Render is awake.")
+
+    def now(self):
+        if self.anchor is None:
+            raise RuntimeError("Server clock has not been synchronized.")
+        return self.epoch + time.monotonic() - self.anchor
+
+class QuoteUnavailable(RuntimeError):
+    pass
+
+def checked_quote(tick, clock):
+    if tick is None:
+        raise QuoteUnavailable("No broker quote yet; open the symbol in MT5 Market Watch.")
+    stamp = float(tick.time)
+    if not math.isfinite(stamp) or stamp <= 0:
+        raise QuoteUnavailable("Broker quote has an invalid timestamp.")
+    now = clock.now()
+    age = now - stamp
+    # Leave 15 seconds for request transit before the server's 90-second limit.
+    if age > 75 or age < -25:
+        kind = "stale / market closed" if age > 75 else "dated in the future"
+        raise QuoteUnavailable(f"Quote {kind}: broker UTC={iso(stamp)}, KMR UTC={iso(now)}, age={age:.1f}s. Waiting for a fresh UTC broker quote.")
+    if not math.isfinite(tick.bid) or not math.isfinite(tick.ask) or tick.bid <= 0 or tick.ask < tick.bid:
+        raise QuoteUnavailable("Broker quote has invalid bid/ask prices.")
+    # Preserve the broker timestamp; never turn an old quote into a fresh quote.
+    return {"time": iso(stamp), "bid": float(tick.bid), "ask": float(tick.ask)}
+
 def run(args):
     base = args.url.rstrip("/")
     parts = urlparse(base)
@@ -48,7 +95,7 @@ def run(args):
     mapping = json.load(open(args.symbol_map, encoding="utf-8")) if args.symbol_map else {}
     session = requests.Session()
     session.auth = ("mt5_feed", password)
-    session.headers["User-Agent"] = "KMR-MT5-Bridge/1.1"
+    session.headers["User-Agent"] = "KMR-MT5-Bridge/1.2"
     if not (mt5.initialize(args.terminal) if args.terminal else mt5.initialize()):
         raise RuntimeError(f"MT5 initialization failed: {mt5.last_error()}. Open and log into your desktop MT5 terminal.")
     if mt5.account_info() is None:
@@ -57,12 +104,27 @@ def run(args):
     symbols = []
     refreshed = 0.0
     last_quotes = 0.0
+    clock = ServerClock()
+    clock_synced = 0.0
+    warned = {}
+
+    def report_wait(symbol, exc):
+        current = time.monotonic()
+        if symbol not in warned or current - warned[symbol] >= 60:
+            print(f"{symbol}: {exc}", file=sys.stderr)
+            warned[symbol] = current
     try:
-        print("KMR feed connected to MT5. Read-only: no orders are submitted.")
+        clock.sync(session, base)
+        clock_synced = time.monotonic()
+        print(f"KMR server clock synchronized. Windows clock difference: {time.time() - clock.now():+.1f}s.")
+        print("KMR feed authenticated and connected to MT5. Read-only: no orders are submitted.")
         print("Scanning all 21 MT5 timeframes. Keep this terminal and MT5 open.")
         while True:
-            now = time.time()
+            now = time.monotonic()
             try:
+                if now - clock_synced >= 60:
+                    clock.sync(session, base)
+                    clock_synced = time.monotonic()
                 if now - refreshed >= 60:
                     symbols = request(session, base, "GET", "/api/feed/symbols")
                     refreshed = now
@@ -71,9 +133,7 @@ def run(args):
                     try:
                         bs = resolve(symbol, mapping)
                         tick = mt5.symbol_info_tick(bs)
-                        if tick is None or now - tick.time > 90 or tick.bid <= 0 or tick.ask < tick.bid:
-                            continue  # market closed or no fresh broker quote
-                        quote = {"time": iso(tick.time), "bid": float(tick.bid), "ask": float(tick.ask)}
+                        quote = checked_quote(tick, clock)
                         quotes.append({"symbol": symbol, "quote": quote})
                         # One 260-bar upload per new closed candle; quote batches are small.
                         for tf in TIMEFRAMES:
@@ -94,9 +154,7 @@ def run(args):
                                                 **{p: float(bar[p]) for p in ("open", "high", "low", "close")}})
                             # Read again after history downloads so we never send an aged quote.
                             tick = mt5.symbol_info_tick(bs)
-                            if tick is None or time.time() - tick.time > 90:
-                                continue
-                            fresh = {"time": iso(tick.time), "bid": float(tick.bid), "ask": float(tick.ask)}
+                            fresh = checked_quote(tick, clock)
                             response = request(session, base, "POST", "/api/feed/candles",
                                                {"symbol": symbol, "timeframe": tf, "quote": fresh, "candles": candles})
                             sent[key] = closed_at
@@ -104,6 +162,8 @@ def run(args):
                                 print(f"{symbol} {tf}: {response.get('reason')}")
                     except PermissionError:
                         raise
+                    except QuoteUnavailable as exc:
+                        report_wait(symbol, exc)
                     except (RuntimeError, ValueError, requests.RequestException) as exc:
                         print(f"{symbol}: {exc}", file=sys.stderr)
                 if quotes and now - last_quotes >= args.interval:
@@ -111,8 +171,10 @@ def run(args):
                     fresh_quotes = []
                     for symbol in symbols:
                         tick = mt5.symbol_info_tick(mapping.get(symbol, symbol))
-                        if tick and 0 <= time.time() - tick.time <= 90 and tick.bid > 0 and tick.ask >= tick.bid:
-                            fresh_quotes.append({"symbol": symbol, "quote": {"time": iso(tick.time), "bid": float(tick.bid), "ask": float(tick.ask)}})
+                        try:
+                            fresh_quotes.append({"symbol": symbol, "quote": checked_quote(tick, clock)})
+                        except QuoteUnavailable as exc:
+                            report_wait(symbol, exc)
                     if fresh_quotes:
                         request(session, base, "POST", "/api/feed/quotes", {"quotes": fresh_quotes})
                         last_quotes = now
@@ -137,4 +199,6 @@ if __name__ == "__main__":
         print("Bridge stopped.")
     except Exception as exc:
         print(str(exc), file=sys.stderr)
+        if "/api/feed/time" in str(exc) or "API status 404" in str(exc):
+            print("Deploy the latest KMR backend before running this bridge version.", file=sys.stderr)
         sys.exit(1)

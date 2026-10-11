@@ -13,7 +13,7 @@ import org.springframework.http.HttpStatus;
  private void lock(String symbol){if(locks.lock(symbol).isEmpty())reject("Add symbol to watchlist first");}
  private void validateQuote(FeedRequest.Quote q,Instant now){
   if(!Double.isFinite(q.bid())||!Double.isFinite(q.ask())||q.bid()<=0||q.ask()<q.bid())reject("Invalid bid/ask");
-  if(q.time().isBefore(now.minusSeconds(90))||q.time().isAfter(now.plusSeconds(30)))reject("Quote is stale or in the future");
+  if(q.time().isBefore(now.minusSeconds(90))||q.time().isAfter(now.plusSeconds(30)))reject("Quote is stale or in the future: quote UTC="+q.time()+", server UTC="+now+", age seconds="+Duration.between(q.time(),now).toSeconds());
  }
  private void observe(String symbol,FeedRequest.Quote q,Instant now){
   for(var s:signals.findBySymbolAndStatusIn(symbol,OPEN))strategy.observe(s,q,now);

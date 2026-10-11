@@ -28,4 +28,6 @@ class FeedSecurityTest {
   mvc.perform(get("/api/signals").with(httpBasic("kalai","1234567890"))).andExpect(status().isOk());
  }
  @Test void anonymousFeedDenied() throws Exception {mvc.perform(get("/api/feed/symbols")).andExpect(status().isUnauthorized());}
+ @Test void feedCanReadServerTime() throws Exception {mvc.perform(get("/api/feed/time").with(httpBasic("mt5_feed","1234567"))).andExpect(status().isOk()).andExpect(jsonPath("$.serverTime").exists());}
+ @Test void anonymousCannotReadFeedTime() throws Exception {mvc.perform(get("/api/feed/time")).andExpect(status().isUnauthorized());}
 }

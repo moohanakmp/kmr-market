@@ -59,8 +59,15 @@ Open the symbol/timeframe chart and load history in MT5 if the bridge reports
 insufficient bars. Only closed candles are sent; the current forming bar is excluded.
 
 MT5 provides UTC timestamps. The bridge derives each closedAt from the next bar's
-open time, including calendar months and market gaps. A fresh quote must be within
-90 seconds of server time; synchronize Windows clock. When markets are closed,
+open time, including calendar months and market gaps. The bridge synchronizes against authenticated KMR server UTC and uses a monotonic
+clock, so Windows clock drift does not change quote age. It checks freshness before
+every candle and quote upload, leaving transit margin within the backend limit
+(90 seconds old / 30 seconds ahead). It preserves the broker timestamp.
+Deploy the latest backend before updating the bridge; /api/feed/time is required.
+A timestamp problem prints broker UTC, KMR UTC, and age in seconds. Positive age
+means an old quote; negative age means the broker quote is ahead of KMR.
+The bridge waits for valid quotes instead of rewriting timestamps or shifting
+broker data to fit the current time. When markets are closed,
 quotes become stale and the UI reports stale / market closed.
 
 ## Strategy and lifecycle
@@ -114,6 +121,7 @@ entry. Local bridge can target `http://localhost:8080`; public URLs must be HTTP
 
 Feed user can access only:
 - GET /api/feed/symbols
+- GET /api/feed/time (server UTC for freshness checks)
 - POST /api/feed/candles
 - POST /api/feed/quotes
 

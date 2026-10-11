@@ -40,6 +40,8 @@ jobs:
         working-directory: frontend
       - run: mvn -B verify
         working-directory: backend
+      - name: Test MT5 bridge clock and quote freshness
+        run: python3 -m unittest discover -s bridge -p 'test_*.py' -v
       - name: Build complete production container
         run: docker build -t kmr:ci .
       - name: Integration smoke test
