@@ -1,0 +1,29 @@
+server:
+  port: ${PORT:8080}
+  error:
+    include-message: always
+spring:
+  datasource:
+    url: ${JDBC_DATABASE_URL:jdbc:postgresql://localhost:5432/kmr}
+    username: ${DB_USERNAME:kmr}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 3
+      minimum-idle: 0
+      connection-timeout: 30000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+app:
+  admin:
+    username: ${ADMIN_USERNAME:kalai}
+    password: ${ADMIN_PASSWORD}

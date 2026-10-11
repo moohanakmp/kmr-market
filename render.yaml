@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: kmr-market
+    runtime: docker
+    plan: free
+    autoDeploy: false
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: JDBC_DATABASE_URL
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: ADMIN_USERNAME
+        value: kalai
+      - key: ADMIN_PASSWORD
+        sync: false

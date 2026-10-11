@@ -1,0 +1,67 @@
+name: Verify and deploy KMR Market
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kmr-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: kmr
+          POSTGRES_USER: kmr
+          POSTGRES_PASSWORD: ci-only-password
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U kmr -d kmr"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - run: npm ci && npm run build
+        working-directory: frontend
+      - run: mvn -B verify
+        working-directory: backend
+      - name: Build complete production container
+        run: docker build -t kmr:ci .
+      - name: Integration smoke test
+        run: bash scripts/smoke-test.sh
+      - name: Upload verified frontend
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend
+          path: frontend/dist
+  deploy:
+    needs: verify
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Trigger deployment of this verified commit
+        env:
+          DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          if [ -z "$DEPLOY_HOOK" ]; then
+            echo 'Set production environment secret RENDER_DEPLOY_HOOK_URL to enable deployment.'
+            exit 1
+          fi
+          curl --fail --silent --show-error --max-time 60 --output /dev/null --get --data-urlencode "ref=$COMMIT" "$DEPLOY_HOOK"
