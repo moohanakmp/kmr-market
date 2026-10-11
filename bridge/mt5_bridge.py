@@ -16,6 +16,21 @@ TIMEFRAMES = "M1 M2 M3 M4 M5 M6 M10 M12 M15 M20 M30 H1 H2 H3 H4 H6 H8 H12 D1 W1 
 def iso(epoch):
     return datetime.fromtimestamp(int(epoch), timezone.utc).isoformat().replace("+00:00", "Z")
 
+def broker_offset_hours(value):
+    hours = float(value)
+    if not math.isfinite(hours) or abs(hours) > 14:
+        raise argparse.ArgumentTypeError("Broker UTC offset must be a finite number between -14 and 14 hours.")
+    return hours
+
+def closed_candles(rates, offset_seconds=0):
+    candles = []
+    for i in range(len(rates) - 1):
+        bar = rates[i]
+        candles.append({"time": iso(float(bar["time"]) - offset_seconds),
+                        "closedAt": iso(float(rates[i+1]["time"]) - offset_seconds),
+                        **{p: float(bar[p]) for p in ("open", "high", "low", "close")}})
+    return candles
+
 def resolve(symbol, mapping):
     broker_symbol = mapping.get(symbol, symbol)
     # Never guess broker suffixes: an explicit map prevents reading the wrong contract.
@@ -65,10 +80,10 @@ class ServerClock:
 class QuoteUnavailable(RuntimeError):
     pass
 
-def checked_quote(tick, clock):
+def checked_quote(tick, clock, offset_seconds=0):
     if tick is None:
         raise QuoteUnavailable("No broker quote yet; open the symbol in MT5 Market Watch.")
-    stamp = float(tick.time)
+    stamp = float(tick.time) - offset_seconds
     if not math.isfinite(stamp) or stamp <= 0:
         raise QuoteUnavailable("Broker quote has an invalid timestamp.")
     now = clock.now()
@@ -76,13 +91,14 @@ def checked_quote(tick, clock):
     # Leave 15 seconds for request transit before the server's 90-second limit.
     if age > 75 or age < -25:
         kind = "stale / market closed" if age > 75 else "dated in the future"
-        raise QuoteUnavailable(f"Quote {kind}: broker UTC={iso(stamp)}, KMR UTC={iso(now)}, age={age:.1f}s. Waiting for a fresh UTC broker quote.")
+        raise QuoteUnavailable(f"Quote {kind}: converted quote UTC={iso(stamp)}, KMR UTC={iso(now)}, age={age:.1f}s, configured broker offset={offset_seconds / 3600:+g}h. Waiting for a fresh UTC broker quote.")
     if not math.isfinite(tick.bid) or not math.isfinite(tick.ask) or tick.bid <= 0 or tick.ask < tick.bid:
         raise QuoteUnavailable("Broker quote has invalid bid/ask prices.")
-    # Preserve the broker timestamp; never turn an old quote into a fresh quote.
+    # A configured time-zone conversion preserves quote age; never stamp it with 'now'.
     return {"time": iso(stamp), "bid": float(tick.bid), "ask": float(tick.ask)}
 
 def run(args):
+    offset_seconds = broker_offset_hours(args.broker_utc_offset_hours) * 3600
     base = args.url.rstrip("/")
     parts = urlparse(base)
     if parts.scheme != "https" and not (parts.scheme == "http" and parts.hostname in ("localhost", "127.0.0.1")):
@@ -95,7 +111,7 @@ def run(args):
     mapping = json.load(open(args.symbol_map, encoding="utf-8")) if args.symbol_map else {}
     session = requests.Session()
     session.auth = ("mt5_feed", password)
-    session.headers["User-Agent"] = "KMR-MT5-Bridge/1.2"
+    session.headers["User-Agent"] = "KMR-MT5-Bridge/1.3"
     if not (mt5.initialize(args.terminal) if args.terminal else mt5.initialize()):
         raise RuntimeError(f"MT5 initialization failed: {mt5.last_error()}. Open and log into your desktop MT5 terminal.")
     if mt5.account_info() is None:
@@ -117,6 +133,7 @@ def run(args):
         clock.sync(session, base)
         clock_synced = time.monotonic()
         print(f"KMR server clock synchronized. Windows clock difference: {time.time() - clock.now():+.1f}s.")
+        print(f"Broker timestamp setting: UTC{offset_seconds / 3600:+g}h; subtracting {offset_seconds:g}s from quotes and candles.")
         print("KMR feed authenticated and connected to MT5. Read-only: no orders are submitted.")
         print("Scanning all 21 MT5 timeframes. Keep this terminal and MT5 open.")
         while True:
@@ -133,7 +150,7 @@ def run(args):
                     try:
                         bs = resolve(symbol, mapping)
                         tick = mt5.symbol_info_tick(bs)
-                        quote = checked_quote(tick, clock)
+                        quote = checked_quote(tick, clock, offset_seconds)
                         quotes.append({"symbol": symbol, "quote": quote})
                         # One 260-bar upload per new closed candle; quote batches are small.
                         for tf in TIMEFRAMES:
@@ -147,14 +164,10 @@ def run(args):
                             closed_at = int(rates[-1]["time"])
                             if sent.get(key) == closed_at:
                                 continue
-                            candles = []
-                            for i in range(len(rates) - 1):
-                                bar = rates[i]
-                                candles.append({"time": iso(bar["time"]), "closedAt": iso(rates[i+1]["time"]),
-                                                **{p: float(bar[p]) for p in ("open", "high", "low", "close")}})
+                            candles = closed_candles(rates, offset_seconds)
                             # Read again after history downloads so we never send an aged quote.
                             tick = mt5.symbol_info_tick(bs)
-                            fresh = checked_quote(tick, clock)
+                            fresh = checked_quote(tick, clock, offset_seconds)
                             response = request(session, base, "POST", "/api/feed/candles",
                                                {"symbol": symbol, "timeframe": tf, "quote": fresh, "candles": candles})
                             sent[key] = closed_at
@@ -172,7 +185,7 @@ def run(args):
                     for symbol in symbols:
                         tick = mt5.symbol_info_tick(mapping.get(symbol, symbol))
                         try:
-                            fresh_quotes.append({"symbol": symbol, "quote": checked_quote(tick, clock)})
+                            fresh_quotes.append({"symbol": symbol, "quote": checked_quote(tick, clock, offset_seconds)})
                         except QuoteUnavailable as exc:
                             report_wait(symbol, exc)
                     if fresh_quotes:
@@ -193,6 +206,8 @@ if __name__ == "__main__":
     parser.add_argument("--terminal", help="Optional path to broker's terminal64.exe")
     parser.add_argument("--symbol-map", help="JSON map: app symbols to exact broker symbols")
     parser.add_argument("--interval", type=int, default=15, help="Quote scan interval in seconds (minimum 5)")
+    parser.add_argument("--broker-utc-offset-hours", type=broker_offset_hours, default=0,
+                        help="Explicit broker timestamp UTC offset. Default 0; use 3 only for observed UTC+3 quote/bar timestamps.")
     try:
         run(parser.parse_args())
     except KeyboardInterrupt:

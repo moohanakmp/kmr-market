@@ -58,17 +58,35 @@ that much weekly/monthly history; those streams wait rather than inventing data.
 Open the symbol/timeframe chart and load history in MT5 if the bridge reports
 insufficient bars. Only closed candles are sent; the current forming bar is excluded.
 
-MT5 provides UTC timestamps. The bridge derives each closedAt from the next bar's
-open time, including calendar months and market gaps. The bridge synchronizes against authenticated KMR server UTC and uses a monotonic
+The default bridge setting expects UTC broker timestamps. It derives each
+closedAt from the next bar's open time, including calendar months and market gaps.
+The bridge synchronizes against authenticated KMR server UTC and uses a monotonic
 clock, so Windows clock drift does not change quote age. It checks freshness before
 every candle and quote upload, leaving transit margin within the backend limit
-(90 seconds old / 30 seconds ahead). It preserves the broker timestamp.
+(90 seconds old / 30 seconds ahead).
 Deploy the latest backend before updating the bridge; /api/feed/time is required.
-A timestamp problem prints broker UTC, KMR UTC, and age in seconds. Positive age
-means an old quote; negative age means the broker quote is ahead of KMR.
-The bridge waits for valid quotes instead of rewriting timestamps or shifting
-broker data to fit the current time. When markets are closed,
-quotes become stale and the UI reports stale / market closed.
+A timestamp problem prints converted quote UTC, KMR UTC, and age in seconds.
+Positive age means an old quote; negative age means the quote is ahead of KMR.
+When markets are closed, quotes become stale and the UI reports stale / market closed.
+
+### Broker timestamps with an observed UTC offset
+
+The Octa demo logs supplied on 2026-10-11 showed continuously advancing BTCUSD
+quote timestamps nearly exactly three hours ahead of KMR UTC (age about -10798s).
+For that observed timestamp convention, stop the bridge, run git pull, and start:
+
+```powershell
+.\.venv-mt5\Scripts\python.exe bridge/mt5_bridge.py --url https://kmr-market.onrender.com --broker-utc-offset-hours 3
+```
+
+This explicit setting subtracts three hours from BOTH quote timestamps and all
+candle open/close timestamps, leaving prices and time intervals unchanged.
+It does not replace quote time with the current time: old quotes remain old and
+are still rejected. No Render environment variable change is required.
+Default is zero; keep zero for terminals already returning UTC. The offset must
+match the broker's observed timestamp convention and may change with daylight
+saving time. An incorrect offset continues to fail freshness checks; it is never
+automatically inferred from a cached quote.
 
 ## Strategy and lifecycle
 

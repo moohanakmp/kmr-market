@@ -75,5 +75,50 @@ class ClockTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "UTC offset"):
                 bridge.ServerClock().sync(None, "https://example.test")
 
+class BrokerOffsetTest(unittest.TestCase):
+    clock = SimpleNamespace(now=lambda: SERVER)
+
+    def test_observed_octa_three_hour_offset_becomes_fresh(self):
+        tick = SimpleNamespace(time=SERVER+10800-2, bid=100, ask=101)
+        result = bridge.checked_quote(tick, self.clock, 10800)
+        self.assertEqual(result["time"], bridge.iso(SERVER-2))
+
+    def test_default_does_not_infer_offset_from_future_tick(self):
+        tick = SimpleNamespace(time=SERVER+10800-2, bid=100, ask=101)
+        with self.assertRaises(bridge.QuoteUnavailable):
+            bridge.checked_quote(tick, self.clock)
+
+    def test_old_quote_stays_old_after_conversion(self):
+        tick = SimpleNamespace(time=SERVER+10800-100, bid=100, ask=101)
+        with self.assertRaisesRegex(bridge.QuoteUnavailable, "age=100.0s"):
+            bridge.checked_quote(tick, self.clock, 10800)
+
+    def test_wrong_offset_still_rejects_future_quote(self):
+        tick = SimpleNamespace(time=SERVER+10800, bid=100, ask=101)
+        with self.assertRaises(bridge.QuoteUnavailable):
+            bridge.checked_quote(tick, self.clock, 7200)
+
+    def test_candles_and_quotes_use_same_conversion_and_keep_prices(self):
+        bars = [dict(time=SERVER+10800-120+i*60, open=100, high=102, low=99, close=101) for i in range(3)]
+        candles = bridge.closed_candles(bars, 10800)
+        self.assertEqual(len(candles), 2)
+        self.assertEqual(candles[0]["time"], bridge.iso(SERVER-120))
+        self.assertEqual(candles[0]["closedAt"], candles[1]["time"])
+        self.assertEqual(candles[1]["closedAt"], bridge.iso(SERVER))
+        self.assertEqual(candles[0]["high"], 102)
+
+    def test_candle_conversion_preserves_month_and_weekend_gaps(self):
+        bars = [dict(time=SERVER+10800+i*31*86400, open=100, high=102, low=99, close=101) for i in range(2)]
+        candle = bridge.closed_candles(bars, 10800)[0]
+        self.assertEqual(candle["time"], bridge.iso(SERVER))
+        self.assertEqual(candle["closedAt"], bridge.iso(SERVER+31*86400))
+
+    def test_invalid_offset_is_rejected(self):
+        for value in ("nan", "inf", "15", "-15"):
+            with self.assertRaises(bridge.argparse.ArgumentTypeError):
+                bridge.broker_offset_hours(value)
+        self.assertEqual(bridge.broker_offset_hours("3"), 3)
+        self.assertEqual(bridge.broker_offset_hours("-3.5"), -3.5)
+
 if __name__ == "__main__":
     unittest.main()
