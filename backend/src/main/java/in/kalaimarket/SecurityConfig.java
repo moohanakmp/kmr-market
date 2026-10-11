@@ -10,10 +10,12 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 @Configuration public class SecurityConfig {
  @Bean UserDetailsService users(@Value("${app.admin.username}") String username,@Value("${app.admin.password}") String password,
   @Value("${MT5_FEED_PASSWORD:}") String feedPassword) {
-  if(password.length()<16) throw new IllegalArgumentException("ADMIN_PASSWORD must have at least 16 characters");
+  if(password.length()<10) throw new IllegalArgumentException("ADMIN_PASSWORD must have at least 10 characters");
   var users=new InMemoryUserDetailsManager(User.withUsername(username).password("{bcrypt}"+new BCryptPasswordEncoder().encode(password)).roles("ADMIN").build());
   if(!feedPassword.isBlank()){
-   if(feedPassword.length()<16||feedPassword.equals(password)||username.equals("mt5_feed"))throw new IllegalArgumentException("Use a distinct MT5_FEED_PASSWORD (16+ characters) and admin username other than mt5_feed");
+   if(feedPassword.length()<7)throw new IllegalArgumentException("MT5_FEED_PASSWORD must have at least 7 characters; this is the KMR bridge password, not your broker login password");
+   if(feedPassword.equals(password))throw new IllegalArgumentException("MT5_FEED_PASSWORD must differ from ADMIN_PASSWORD");
+   if(username.equalsIgnoreCase("mt5_feed"))throw new IllegalArgumentException("ADMIN_USERNAME must differ from mt5_feed when the MT5 bridge is enabled");
    users.createUser(User.withUsername("mt5_feed").password("{bcrypt}"+new BCryptPasswordEncoder().encode(feedPassword)).roles("FEED").build());
   }
   return users;

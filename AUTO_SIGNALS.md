@@ -6,9 +6,10 @@ It does not reuse or migrate the old Netlify scanner algorithm.
 
 ## One-time setup
 
-1. In Render Environment, create a separate `MT5_FEED_PASSWORD` (at least 16
+1. In Render Environment, create a separate `MT5_FEED_PASSWORD` (at least 7
    characters). Save and redeploy the latest main commit. Feed username is fixed
    as `mt5_feed`. Do not use the admin or broker password as the feed password.
+   Admin password `ADMIN_PASSWORD` accepts 10 or more characters.
    No new database grants are needed; Flyway V2 adds tables to the existing kmr
    schema using your existing DB_SCHEMA=kmr and kmr_user credentials.
 2. On **Windows**, install Python 3.11 x64 and your broker's MT5 desktop terminal.

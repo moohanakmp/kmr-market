@@ -75,7 +75,7 @@ unzip /mnt/c/Users/kalai/Downloads/kmr-market-v1.0.zip -d ~/projects
 cd ~/projects/kmr-market-v1.0
 cp .env.example .env
 nano .env
-# Set two distinct random passwords. ADMIN_PASSWORD must be at least 16 characters.
+# Set two distinct random passwords. ADMIN_PASSWORD must be at least 10 characters.
 docker compose up --build -d
 docker compose logs -f app
 ```
@@ -144,7 +144,7 @@ this starter uses Neon instead. Keep DB and service regions close.
    create a Docker web service manually. Choose Free, root Dockerfile, health path
    `/actuator/health`, and disable automatic Git deployments (Actions owns deploys).
 4. Set Render environment variables: `JDBC_DATABASE_URL`, `DB_USERNAME`,
-   `DB_PASSWORD`, `ADMIN_USERNAME`, `ADMIN_PASSWORD` (16+ characters).
+   `DB_PASSWORD`, `ADMIN_USERNAME`, `ADMIN_PASSWORD` (10+ characters).
    PORT is supplied by Render. Never put secrets in frontend code or Git.
    Set `DB_SCHEMA=kmr`. In Neon SQL Editor, run as the database owner:\n\n   ```sql\n   CREATE SCHEMA IF NOT EXISTS kmr;\n   GRANT USAGE, CREATE ON SCHEMA kmr TO kmr_user;\n   ```\n\n   Run as `neondb_owner`; the schema remains admin-owned, while the app role can\n   create its own tables. This avoids needing SET ROLE permission to kmr_user.\n   Substitute your actual DB username in GRANT. KMR tables and Flyway history use this schema;\n   existing public objects are preserved. For a previously working deployment that\n   already stores KMR tables in public, leave DB_SCHEMA unset or use public to\n   preserve access to existing data. Do not change an existing app schema blindly.\n5. Initial deploy can be performed from Render. Open the HTTPS service URL.
 6. Copy the secret deploy-hook URL from Render service Settings. In GitHub, create

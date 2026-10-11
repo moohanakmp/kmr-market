@@ -43,8 +43,8 @@ def run(args):
     if parts.username or parts.password or parts.query or parts.fragment:
         raise ValueError("Use the plain app URL without credentials or query parameters.")
     password = os.environ.get("MT5_FEED_PASSWORD") or getpass.getpass("KMR MT5 feed password: ")
-    if len(password) < 16:
-        raise ValueError("Feed password must have at least 16 characters.")
+    if len(password) < 7:
+        raise ValueError("KMR feed password must have at least 7 characters. Use MT5_FEED_PASSWORD from Render, not your broker login password.")
     mapping = json.load(open(args.symbol_map, encoding="utf-8")) if args.symbol_map else {}
     session = requests.Session()
     session.auth = ("mt5_feed", password)
