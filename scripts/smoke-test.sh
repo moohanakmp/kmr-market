@@ -170,6 +170,9 @@ assert abs(api('/tracker/'+str(s['id']),auth=admin)['deals'][0]['net']-2.69)<.00
 api('/feed/execution/release',dict(worker=worker))
 # Browser cookie session survives page reload; CSRF protects cookie writes.
 import http.cookiejar
+with urllib.request.urlopen(urllib.request.Request('http://localhost:8080/api/session',headers={'X-Forwarded-Proto':'https'})) as res:
+ cookie=res.headers.get('Set-Cookie','').lower()
+ assert '; secure' in cookie and 'httponly' in cookie and 'samesite=strict' in cookie, 'HTTPS proxy session cookie must be secure'
 jar=http.cookiejar.CookieJar();browser=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
 def browser_api(path,method='GET',body=None,headers=None):
  req=urllib.request.Request('http://localhost:8080/api'+path,method=method,data=None if body is None else json.dumps(body).encode(),headers={'Content-Type':'application/json',**(headers or {})})

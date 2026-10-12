@@ -20,8 +20,16 @@ import org.springframework.security.config.http.SessionCreationPolicy;
   }
   return users;
  }
+ private static boolean cookieCsrfRequired(jakarta.servlet.http.HttpServletRequest req){
+  if(java.util.Set.of("GET","HEAD","OPTIONS","TRACE").contains(req.getMethod()))return false;
+  var session=req.getSession(false);if(session==null)return false;
+  var saved=session.getAttribute(org.springframework.security.web.context.HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY);
+  boolean cookieAdmin=saved instanceof org.springframework.security.core.context.SecurityContext ctx&&ctx.getAuthentication()!=null&&ctx.getAuthentication().getAuthorities().stream().anyMatch(a->a.getAuthority().equals("ROLE_ADMIN"));
+  var header=req.getHeader("Authorization");boolean basic=header!=null&&header.startsWith("Basic ");
+  return cookieAdmin||!basic;
+ }
  @Bean SecurityFilterChain security(HttpSecurity http) throws Exception {
-  return http.csrf(c->c.requireCsrfProtectionMatcher(req->!java.util.Set.of("GET","HEAD","OPTIONS","TRACE").contains(req.getMethod())&&req.getHeader("Authorization")==null&&req.getSession(false)!=null))
+  return http.csrf(c->c.requireCsrfProtectionMatcher(SecurityConfig::cookieCsrfRequired))
    .sessionManagement(s->s.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
    .securityContext(c->c.requireExplicitSave(true).securityContextRepository(new org.springframework.security.web.context.HttpSessionSecurityContextRepository()))
    .authorizeHttpRequests(a->a.requestMatchers(org.springframework.http.HttpMethod.GET,"/api/session").permitAll().requestMatchers("/api/feed/**").hasAnyRole("ADMIN","FEED").requestMatchers("/api/**").hasRole("ADMIN").requestMatchers("/actuator/health").permitAll().requestMatchers("/actuator/**").denyAll().anyRequest().permitAll())
