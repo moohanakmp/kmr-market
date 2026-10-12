@@ -151,3 +151,21 @@ credentials are not forwarded to a different host.
 
 No order_send / trade execution function is called. Broker integration for
 execution requires a separate implementation and explicit demo-account validation.
+
+## Automatically saved trade plans
+
+Every newly generated signal automatically saves one linked trade plan in the
+same database transaction. V3 also creates plans for signals already stored
+before this update, preserving their original creation times and current states.
+Existing manual plans are preserved. No broker order is submitted.
+
+Trade plans show source (MT5/manual), timeframe, entry, SL, TP1, TP2, current
+signal status and quote-gap flag. The list refreshes every 15 seconds and shows
+the latest 100 plans. The saved target column holds TP2 for automatic plans;
+TP1 and tracking metadata are read from the linked signal to avoid state drift.
+Replay uploads and quote updates do not create duplicate plans. A unique signal
+reference enforces one saved plan per signal. Removing a saved plan does not
+cancel or delete its signal; later quote updates do not recreate a removed plan.
+
+Deploy the latest backend and refresh the app. Existing bridge commands and
+Render credentials do not change for this feature.

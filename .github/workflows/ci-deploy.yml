@@ -42,6 +42,8 @@ jobs:
         working-directory: backend
       - name: Test MT5 bridge clock and quote freshness
         run: python3 -m unittest discover -s bridge -p 'test_*.py' -v
+      - name: Test existing-signal plan migration
+        run: bash scripts/test-plan-migration.sh
       - name: Build complete production container
         run: docker build -t kmr:ci .
       - name: Integration smoke test

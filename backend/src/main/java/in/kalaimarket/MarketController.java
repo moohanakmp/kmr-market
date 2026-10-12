@@ -9,8 +9,8 @@ import java.util.*;
 @RestController @RequestMapping("/api") public class MarketController {
  private final TradeRepository trades; private final WatchRepository watch;
  public MarketController(TradeRepository trades,WatchRepository watch) { this.trades=trades;this.watch=watch; }
- @GetMapping("/me") public Map<String,String> me() { return Map.of("app","KMR Market","version","1.0.0","mode","MANUAL_PLANS"); }
- @GetMapping("/plans") public List<TradePlan> plans() { return trades.findAll(PageRequest.of(0,100,Sort.by("createdAt").descending())).getContent(); }
+ @GetMapping("/me") public Map<String,String> me() { return Map.of("app","KMR Market","version","1.0.0","mode","AUTO_AND_MANUAL_PLANS"); }
+ @GetMapping("/plans") public List<TradePlanView> plans() { return trades.findPlanViews(PageRequest.of(0,100)); }
  @PostMapping("/plans") @ResponseStatus(HttpStatus.CREATED) public TradePlan create(@Valid @RequestBody TradeRequest r) {
   if(!r.validLevels()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"BUY: stop < entry < target; SELL: target < entry < stop");
   TradePlan p=new TradePlan();p.symbol=r.symbol();p.direction=r.direction();p.entry=r.entry();p.stopLoss=r.stopLoss();p.target=r.target();return trades.save(p);

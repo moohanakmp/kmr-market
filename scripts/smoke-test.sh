@@ -74,6 +74,17 @@ assert api('/feed/candles',payload)['status']=='UNCHANGED'
 signals=api('/signals',auth=admin)
 assert len(signals)==1 and signals[0]['status']=='PENDING' and signals[0]['entry']>q['ask']
 s=signals[0]
+def linked_plan():
+ plans=api('/plans',auth=admin)
+ linked=[p for p in plans if p['sourceSignalId']==s['id']]
+ assert len(linked)==1, 'signal must have exactly one saved plan'
+ return linked[0]
+p=linked_plan()
+assert p['source']=='MT5' and p['timeframe']=='M1' and p['status']=='PENDING'
+assert p['entry']==s['entry'] and p['stopLoss']==s['stopLoss'] and p['tp1']==s['tp1'] and p['tp2']==s['tp2'] and p['target']==s['tp2']
+assert p['createdAt']==s['createdAt']
+manual=[p for p in api('/plans',auth=admin) if p['source']=='MANUAL']
+assert len(manual)==1 and manual[0]['entry']==2000 and manual[0]['target']==2020 and manual[0]['timeframe'] is None
 # Bad future candle or stale quote cannot create a new setup.
 bad=dict(payload,quote=dict(q,time=iso(now-timedelta(seconds=100))))
 try:api('/feed/candles',bad);raise AssertionError('stale quote accepted')
@@ -87,9 +98,11 @@ except urllib.error.HTTPError as e:assert e.code==403
 # A later quote beyond TP1 must be MISSED, not an instant TP.
 api('/feed/quotes',{'quotes':[{'symbol':'XAUUSD','quote':{'time':iso(now+timedelta(seconds=1)),'bid':s['tp1']+0.1,'ask':s['tp1']+0.11}}]})
 assert api('/signals',auth=admin)[0]['status']=='MISSED'
+assert linked_plan()['status']=='MISSED' and linked_plan()['id']==p['id']
 # Subsequent candles for same source candle cannot duplicate the missed setup.
 assert api('/feed/candles',payload)['status']=='UNCHANGED'
 assert len(api('/signals',auth=admin))==1
+assert linked_plan()['id']==p['id']
 assert len(api('/scanner',auth=admin)['timeframes'])==21
 print('MT5 signal integration checks passed')
 PYTEST

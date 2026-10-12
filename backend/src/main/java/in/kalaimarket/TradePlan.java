@@ -10,5 +10,6 @@ import java.time.Instant;
  @Column(name="stop_loss",precision=20,scale=8) public BigDecimal stopLoss;
  @Column(precision=20,scale=8) public BigDecimal target;
  @Column(name="created_at") public Instant createdAt=Instant.now();
+ @Column(name="source_signal_id") public Long sourceSignalId;
  public enum Direction { BUY, SELL }
 }
