@@ -9,7 +9,7 @@ class DemoExecutionServiceTest {
  private final ExecutionWorkerRepository workers=mock(ExecutionWorkerRepository.class);
  private final BrokerExecutionRepository executions=mock(BrokerExecutionRepository.class);
  private final AutoSignalRepository signals=mock(AutoSignalRepository.class);
- private final DemoExecutionService service=new DemoExecutionService(workers,executions,signals,123456,"OctaFX-Demo");
+ private final DemoExecutionService service=new DemoExecutionService(workers,executions,signals,123456,"OctaFX-Demo",mock(ExecutionEventRepository.class));
  private final String owner="11111111-1111-4111-8111-111111111111";
  private AutoSignal signal;
  private ExecutionWorker lease;
@@ -22,7 +22,7 @@ class DemoExecutionServiceTest {
  @Test void claimIsPersistedBeforeBrokerSubmission(){assertEquals(BrokerExecution.Status.CLAIMED,service.claim(owner,123456,"OctaFX-Demo",7).status);verify(executions).save(any());}
  @Test void duplicateCannotBeClaimed(){when(executions.findBySignalId(7L)).thenReturn(Optional.of(new BrokerExecution()));assertThrows(ResponseStatusException.class,()->service.claim(owner,123456,"OctaFX-Demo",7));verify(executions,never()).save(any());}
  @Test void wrongAccountOrServerCannotBeClaimed(){assertThrows(ResponseStatusException.class,()->service.claim(owner,999,"OctaFX-Demo",7));assertThrows(ResponseStatusException.class,()->service.claim(owner,123456,"Real",7));verify(executions,never()).save(any());}
- @Test void disabledBindingCannotClaim(){var disabled=new DemoExecutionService(workers,executions,signals,0,"OctaFX-Demo");assertThrows(ResponseStatusException.class,()->disabled.claim(owner,123456,"OctaFX-Demo",7));}
+ @Test void disabledBindingCannotClaim(){var disabled=new DemoExecutionService(workers,executions,signals,0,"OctaFX-Demo",mock(ExecutionEventRepository.class));assertThrows(ResponseStatusException.class,()->disabled.claim(owner,123456,"OctaFX-Demo",7));}
  @Test void gappedStaleExpiredAndDisabledSignalsCannotClaim(){
   signal.trackingGap=true;assertThrows(ResponseStatusException.class,()->service.claim(owner,123456,"OctaFX-Demo",7));signal.trackingGap=false;
   signal.timeframe=Timeframe.H2;assertThrows(ResponseStatusException.class,()->service.claim(owner,123456,"OctaFX-Demo",7));signal.timeframe=Timeframe.H1;

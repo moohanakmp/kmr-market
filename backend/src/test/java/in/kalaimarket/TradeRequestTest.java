@@ -7,3 +7,4 @@ class TradeRequestTest {
  @Test void buyAndSellValidateOppositeDirections(){ assertTrue(r(TradePlan.Direction.BUY,"1990","2020").validLevels());assertTrue(r(TradePlan.Direction.SELL,"2010","1980").validLevels());assertFalse(r(TradePlan.Direction.BUY,"2010","2020").validLevels());assertFalse(r(TradePlan.Direction.SELL,"2010","2020").validLevels()); }
  @Test void equalStopOrTargetRejected(){assertFalse(r(TradePlan.Direction.BUY,"2000","2020").validLevels());assertFalse(r(TradePlan.Direction.SELL,"2010","2000").validLevels());}
 }
+

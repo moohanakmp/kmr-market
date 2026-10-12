@@ -16,5 +16,12 @@ import java.math.BigDecimal;
  public String message;
  @Column(name="created_at") public Instant createdAt;
  @Column(name="updated_at") public Instant updatedAt;
- public enum Status { CLAIMED, BROKER_PENDING, OPEN, CLOSED, CANCELLED, REJECTED, UNKNOWN }
+ @Column(name="broker_entry_price",precision=20,scale=8) public BigDecimal brokerEntryPrice;
+ @Column(precision=20,scale=8) public BigDecimal volume;
+ @Column(name="floating_profit",precision=24,scale=8) public BigDecimal floatingProfit;
+ @Column(name="position_identifier") public Long positionIdentifier;
+ @Column(name="reached_target") public int reachedTarget;
+ @Column(name="protected_target") public int protectedTarget;
+ @Column(name="close_reason") public String closeReason;
+ public enum Status { CLAIMED, BROKER_PENDING, OPEN, CLOSED, EXPIRED, STOPPED, CANCELLED, REJECTED, UNKNOWN }
 }

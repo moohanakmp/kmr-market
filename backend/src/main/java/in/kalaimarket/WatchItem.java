@@ -4,3 +4,4 @@ import jakarta.persistence.*;
  @Id public String symbol;
  public WatchItem() {} public WatchItem(String symbol) { this.symbol=symbol; }
 }
+

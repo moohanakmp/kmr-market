@@ -6,9 +6,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 @Service public class AutoSignalService {
- private static final List<AutoSignal.Status> OPEN=List.of(AutoSignal.Status.PENDING,AutoSignal.Status.ACTIVE,AutoSignal.Status.TP1);
- private final FeedLockRepository locks;private final AutoSignalRepository signals;private final ScanStateRepository scans;private final SignalStrategy strategy;
- public AutoSignalService(FeedLockRepository l,AutoSignalRepository s,ScanStateRepository f,SignalStrategy e){locks=l;signals=s;scans=f;strategy=e;}
+ private static final List<AutoSignal.Status> OPEN=List.of(AutoSignal.Status.PENDING,AutoSignal.Status.ACTIVE,AutoSignal.Status.TP1,AutoSignal.Status.TP2,AutoSignal.Status.TP3,AutoSignal.Status.TARGET);
+ private final MarketQuoteRepository quotes;private final FeedLockRepository locks;private final AutoSignalRepository signals;private final ScanStateRepository scans;private final SignalStrategy strategy;
+ public AutoSignalService(FeedLockRepository l,AutoSignalRepository s,ScanStateRepository f,SignalStrategy e,MarketQuoteRepository q){quotes=q;locks=l;signals=s;scans=f;strategy=e;}
  private void reject(String reason){throw new ResponseStatusException(HttpStatus.BAD_REQUEST,reason);}
  private void lock(String symbol){if(locks.lock(symbol).isEmpty())reject("Add symbol to watchlist first");}
  private void validateQuote(FeedRequest.Quote q,Instant now){
@@ -16,7 +16,9 @@ import org.springframework.http.HttpStatus;
   if(q.time().isBefore(now.minusSeconds(90))||q.time().isAfter(now.plusSeconds(30)))reject("Quote is stale or in the future: quote UTC="+q.time()+", server UTC="+now+", age seconds="+Duration.between(q.time(),now).toSeconds());
  }
  private void observe(String symbol,FeedRequest.Quote q,Instant now){
-  for(var s:signals.findBySymbolAndStatusIn(symbol,OPEN))strategy.observe(s,q,now);
+  var old=quotes.findById(symbol).orElse(null);
+  if(old==null||q.time().isAfter(old.quotedAt)){var mq=new MarketQuote();mq.symbol=symbol;mq.bid=AutoSignal.price(q.bid());mq.ask=AutoSignal.price(q.ask());mq.quotedAt=q.time();quotes.save(mq);}
+  for(var s:signals.findBySymbolAndStatusIn(symbol,OPEN))if(!s.finalTargetReached())strategy.observe(s,q,now);
   for(var state:scans.findBySymbol(symbol))if(state.lastQuoteAt==null||q.time().isAfter(state.lastQuoteAt)){state.lastQuoteAt=q.time();state.receivedAt=now;}
  }
  @Transactional public Map<String,Object> ingest(FeedRequest r){
@@ -34,7 +36,7 @@ import org.springframework.http.HttpStatus;
   if(last.isBefore(now.minusSeconds(maxAge)))reject("Latest candle is too old for this timeframe");
   observe(r.symbol(),r.quote(),now);
   var a=strategy.analyze(r.candles(),r.quote());state.id=key;state.symbol=r.symbol();state.timeframe=r.timeframe();state.lastBar=last;state.lastScanAt=now;state.lastQuoteAt=r.quote().time();state.receivedAt=now;state.quality=a.quality();state.reason=a.reason();
-  boolean alreadyOpen=signals.findBySymbolAndStatusIn(r.symbol(),OPEN).stream().anyMatch(s->s.timeframe==r.timeframe());
+  boolean alreadyOpen=signals.findBySymbolAndStatusIn(r.symbol(),OPEN).stream().anyMatch(s->!s.isManual()&&!s.finalTargetReached()&&s.timeframe==r.timeframe());
   if(a.direction()!=null&&!alreadyOpen&&!signals.existsBySymbolAndTimeframeAndSourceBar(r.symbol(),r.timeframe(),last)){
    var s=strategy.create(r.symbol(),r.timeframe(),r.candles(),r.quote(),a,now);
    if(s.entry.signum()>0&&s.stopLoss.signum()>0&&s.tp1.signum()>0&&s.tp2.signum()>0&&(s.direction==TradePlan.Direction.BUY?s.stopLoss.compareTo(s.entry)<0&&s.entry.compareTo(s.tp1)<0&&s.tp1.compareTo(s.tp2)<0&&s.entry.doubleValue()>r.quote().ask():s.tp2.compareTo(s.tp1)<0&&s.tp1.compareTo(s.entry)<0&&s.entry.compareTo(s.stopLoss)<0&&s.entry.doubleValue()<r.quote().bid())){signals.save(s);state.reason="New "+s.direction+" setup; waiting for entry";}

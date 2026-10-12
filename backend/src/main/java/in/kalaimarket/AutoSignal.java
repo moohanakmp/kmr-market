@@ -3,8 +3,13 @@ import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.util.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 @Entity @Table(name="auto_signal") public class AutoSignal {
  @Id @GeneratedValue(strategy=GenerationType.IDENTITY) public Long id;
+ @Version public long version;
+ @Column(name="execution_note") public String executionNote;
  public String symbol;
  @Enumerated(EnumType.STRING) public Timeframe timeframe;
  @Enumerated(EnumType.STRING) public TradePlan.Direction direction;
@@ -23,6 +28,16 @@ import java.time.Instant;
  @Column(name="updated_at") public Instant updatedAt;
  @Column(name="last_quote_at") public Instant lastQuoteAt;
  @Column(name="tracking_gap") public boolean trackingGap;
- public enum Status {PENDING, ACTIVE, TP1, TP2, STOPPED, MISSED, EXPIRED}
+ @JdbcTypeCode(SqlTypes.JSON) @Column(columnDefinition="jsonb") public List<BigDecimal> targets=new ArrayList<>();
+ @Column(name="pending_kind") @Enumerated(EnumType.STRING) public PendingKind pendingKind=PendingKind.STOP;
+ @Column(name="request_key") public UUID requestKey;
+ @Column(name="manual_plan_id") public Long manualPlanId;
+ @Column(name="cancel_requested") public boolean cancelRequested;
+ @Column(name="reached_target") public int reachedTarget;
+ public enum PendingKind {STOP,LIMIT}
+ public enum Status {PENDING, ACTIVE, TP1, TP2, TP3, TARGET, STOPPED, MISSED, EXPIRED, CANCELLED}
+ public List<BigDecimal> getTargets(){return targets==null||targets.isEmpty()?List.of(tp1,tp2):targets;}
+ public boolean finalTargetReached(){return reachedTarget>=getTargets().size();}
+ public boolean isManual(){return "MANUAL_PENDING_V1".equals(strategy);}
  public static BigDecimal price(double v){return BigDecimal.valueOf(v).setScale(8,RoundingMode.HALF_UP);}
 }

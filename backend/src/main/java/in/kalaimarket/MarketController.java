@@ -15,7 +15,7 @@ import java.util.*;
   if(!r.validLevels()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"BUY: stop < entry < target; SELL: target < entry < stop");
   TradePlan p=new TradePlan();p.symbol=r.symbol();p.direction=r.direction();p.entry=r.entry();p.stopLoss=r.stopLoss();p.target=r.target();return trades.save(p);
  }
- @DeleteMapping("/plans/{id}") @ResponseStatus(HttpStatus.NO_CONTENT) public void delete(@PathVariable Long id) { trades.deleteById(id); }
+ @DeleteMapping("/plans/{id}") @ResponseStatus(HttpStatus.NO_CONTENT) public void delete(@PathVariable Long id) { var p=trades.findById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Plan not found"));if(p.sourceSignalId!=null)throw new ResponseStatusException(HttpStatus.CONFLICT,"Keep linked plans for the audit trail; use Cancel pending instead");trades.deleteById(id); }
  public record WatchRequest(@NotBlank @Pattern(regexp="[A-Z0-9._-]{2,20}") String symbol) {}
  @GetMapping("/watchlist") public List<WatchItem> watchlist() { return watch.findAll(Sort.by("symbol")); }
  @PostMapping("/watchlist") public WatchItem add(@Valid @RequestBody WatchRequest r) { return watch.save(new WatchItem(r.symbol())); }

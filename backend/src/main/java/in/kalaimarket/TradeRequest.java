@@ -10,3 +10,4 @@ public record TradeRequest(@NotBlank @Pattern(regexp="[A-Z0-9._-]{2,20}") String
   return direction==TradePlan.Direction.BUY ? stopLoss.compareTo(entry)<0 && target.compareTo(entry)>0 : stopLoss.compareTo(entry)>0 && target.compareTo(entry)<0;
  }
 }
+

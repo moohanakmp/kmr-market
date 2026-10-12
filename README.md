@@ -4,7 +4,7 @@ Java 21 / Spring Boot 3.5.6, React 19 / TypeScript / Vite, PostgreSQL 17/18.
 Personal, single-admin starter: watchlist CRUD, manual trade-plan CRUD, price validation,
 reward/risk display, database migrations, responsive UI, health endpoint and CI/CD.
 This is a new starter, not a migration of the previous KMR scanner. Live quotes and automatic signals are supplied by the Windows MT5 bridge.
-Optional demo broker orders are supported by the separate MT5 execution worker. Live-account execution, backtesting and P&L accounting are not implemented. Redis and Kubernetes/Devtron are unnecessary for this first version.
+Optional demo broker orders are supported by the separate MT5 execution worker. Live-account execution and backtesting are not implemented. Broker-deal P&L is available in v1.1. Redis and Kubernetes/Devtron are unnecessary for this first version.
 
 ## Architecture
 
@@ -220,3 +220,11 @@ for new scans and entries. Real broker accounts are rejected. Demo account bindi
 is configured privately in Render; default account 0 disables execution claims.
 The data bridge stays read-only, and the execution worker must be started
 separately with --execute-demo.
+
+## Local orders, multiple targets and P&L (v1.1)
+
+See [LOCAL_MT5_V1_1.md](LOCAL_MT5_V1_1.md) for manual pending-order queueing,
+automatic three-target setups, broker cancellation/fill synchronization, daily
+net P&L, the complete PostgreSQL deal/event tracker, persistent browser sessions
+and optional Windows sign-in startup. The updated worker is required after
+deploying the v2 execution API. Existing orders keep their original targets.

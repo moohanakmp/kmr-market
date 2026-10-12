@@ -156,12 +156,13 @@ Enter the existing Render MT5_FEED_PASSWORD only at the hidden KMR feed
 password prompt. The startup should display DEMO execution enabled. Use the
 same --terminal path and --symbol-map file for both processes if configured.
 The cloud worker retains 0.01 lots, separate 5-pending and 5-open limits per
-commodity, the eight enabled timeframes, TP2 and the existing TP1 SL rule.
+commodity and the eight enabled timeframes. Current multiple-target behavior
+and P&L are described in LOCAL_MT5_V1_1.md.
 Starting the worker does not prove an order was submitted: only eligible
 signals are sent, and broker acceptance must be checked separately.
-Manual plans created with Save plan remain planning records. This executor
-consumes automatic signals only; moving it to the cloud does not enable
-manual-plan submission to MT5.
+In v1.1, manual requests submitted using Create and queue MT5 demo order are
+also executed. Historical saved manual drafts require explicit Queue in MT5
+and completion of pending type, targets and expiry before submission.
 
 ## Validate before switching off your PC
 
@@ -183,7 +184,7 @@ turning off your own PC. The EC2 instance itself must remain running.
 
 This first trial uses a logged-in remote Windows session. Automatic recovery
 after Windows reboots or crashes is not configured by these commands. Reconnect,
-log into MT5 and restart BOTH workers if the session ends. Dynamic TP1 SL
+log into MT5 and restart BOTH workers if the session ends. Dynamic intermediate-target SL
 management stops when the executor stops, while broker-accepted SL, TP2 and
 pending expiry remain. A supervised startup configuration is a separate next
 step after the cloud feed and demo executor are verified.

@@ -1,3 +1,10 @@
+# Current v1.1 policy
+
+See [LOCAL_MT5_V1_1.md](LOCAL_MT5_V1_1.md) for the current manual/automatic
+order workflow, multiple targets, final-target closure, P&L and startup commands.
+The two-target policy below describes v1.0 orders already created; v1.1 does not
+change their original levels. New automatic setups have three targets.
+
 # KMR demo broker execution
 
 This update adds an opt-in Windows execution worker. It actually submits broker

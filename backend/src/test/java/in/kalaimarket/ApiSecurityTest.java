@@ -21,3 +21,4 @@ class ApiSecurityTest {
  @Test void badPasswordDenied() throws Exception {mvc.perform(get("/api/me").with(httpBasic("kalai","wrong"))).andExpect(status().isUnauthorized());}
  @Test void invalidTradeRejected() throws Exception {mvc.perform(post("/api/plans").with(httpBasic("kalai","test-password-long-enough")).contentType("application/json").content("{\"symbol\":\"XAUUSD\",\"direction\":\"BUY\",\"entry\":2000,\"stopLoss\":2010,\"target\":2020}")).andExpect(status().isBadRequest());}
 }
+

@@ -81,9 +81,11 @@ def linked_plan():
  return linked[0]
 p=linked_plan()
 assert p['source']=='MT5' and p['timeframe']=='M1' and p['status']=='PENDING'
-assert p['entry']==s['entry'] and p['stopLoss']==s['stopLoss'] and p['tp1']==s['tp1'] and p['tp2']==s['tp2'] and p['target']==s['tp2']
+assert p['entry']==s['entry'] and p['stopLoss']==s['stopLoss'] and p['tp1']==s['tp1'] and p['tp2']==s['tp2'] and p['target']==s['targets'][-1]
 assert p['createdAt']==s['createdAt']
 cfg=api('/feed/execution/config')
+assert cfg['mode']=='DEMO_ONLY_V2' and cfg['takeProfit']=='FINAL_TARGET'
+assert len(s['targets'])==3 and s['targets'][2]>s['tp2']
 assert cfg['volume']==0.01 and cfg['maxPendingPerSymbol']==5 and cfg['maxOpenPerSymbol']==5
 assert cfg['timeframes']==['M1','M5','M15','M30','H1','D1','W1','MN1']
 worker='11111111-1111-4111-8111-111111111111'
@@ -104,6 +106,7 @@ api('/feed/execution/report',dict(worker=worker,signalId=s['id'],status='OPEN',o
 assert linked_plan()['positionTicket']==888 and linked_plan()['brokerStatus']=='OPEN'
 api('/feed/execution/report',dict(worker=worker,signalId=s['id'],status='CLOSED',message='CI synthetic closure'))
 assert api('/feed/execution/tracked')==[]
+assert len(api('/tracker/'+str(s['id']),auth=admin)['events'])>=4
 api('/feed/execution/release',dict(worker=worker))
 api('/feed/execution/lease',dict(worker=other))
 api('/feed/execution/release',dict(worker=other))
@@ -128,5 +131,56 @@ assert api('/feed/candles',payload)['status']=='UNCHANGED'
 assert len(api('/signals',auth=admin))==1
 assert linked_plan()['id']==p['id']
 assert api('/scanner',auth=admin)['timeframes']==['M1','M5','M15','M30','H1','D1','W1','MN1']
-print('MT5 signal integration checks passed')
+# Manual request + existing draft conversion, single target support and durable dedup.
+import uuid
+api('/feed/quotes',{'quotes':[{'symbol':'XAUUSD','quote':{'time':iso(now+timedelta(seconds=2)),'bid':2000,'ask':2000.01}}]})
+manual_request=dict(requestKey=str(uuid.uuid4()),planId=manual[0]['id'],symbol='XAUUSD',direction='BUY',timeframe='M5',pendingKind='STOP',entry=2010,stopLoss=2000,targets=[2020,2030,2040],expiresAt=iso(now+timedelta(hours=1)))
+m=api('/orders/manual',manual_request,admin)
+assert api('/orders/manual',manual_request,admin)['id']==m['id']
+linked=[p for p in api('/plans',auth=admin) if p['sourceSignalId']==m['id']]
+assert len(linked)==1 and linked[0]['id']==manual[0]['id'] and linked[0]['source']=='MANUAL' and linked[0]['targets']==[2020,2030,2040]
+api('/feed/execution/lease',dict(worker=worker))
+claim=dict(worker=worker,account=123456,server='OctaFX-Demo',signalId=m['id'])
+api('/feed/execution/claim',claim)
+api('/feed/execution/report',dict(worker=worker,signalId=m['id'],status='BROKER_PENDING',orderTicket=999,brokerEntryPrice=2010,volume=.01,brokerStopLoss=2000,brokerTakeProfit=2040,message='CI manual pending; fake broker'))
+api('/orders/'+str(m['id'])+'/cancel',{},admin)
+assert api('/feed/execution/tracked')[0]['signal']['cancelRequested']
+api('/feed/execution/report',dict(worker=worker,signalId=m['id'],status='CANCELLED',message='CI pending removed; fake broker'))
+try:
+ req=urllib.request.Request('http://localhost:8080/api/plans/'+str(linked[0]['id']),method='DELETE',headers={'Authorization':admin})
+ urllib.request.urlopen(req);raise AssertionError('audit plan deleted')
+except urllib.error.HTTPError as e:assert e.code==409
+single=dict(manual_request,requestKey=str(uuid.uuid4()),planId=None,entry=1990,stopLoss=1980,targets=[2000],pendingKind='LIMIT')
+assert len(api('/orders/manual',single,admin)['targets'])==1
+# Expiry without an incoming quote.
+short=dict(manual_request,requestKey=str(uuid.uuid4()),planId=None,expiresAt=iso(datetime.now(timezone.utc)+timedelta(seconds=1)))
+exp=api('/orders/manual',short,admin)
+import time
+time.sleep(17)
+assert next(x for x in api('/signals',auth=admin) if x['id']==exp['id'])['status']=='EXPIRED'
+# Realized ledger is idempotent and includes all known deal costs.
+clock_now=datetime.now(timezone.utc)
+deals=[dict(ticket=10001,orderTicket=999,positionIdentifier=888,signalId=s['id'],tradedAt=iso(clock_now),symbol='XAUUSD',dealType=1,entryKind=1,reason=5,volume=.01,price=2040,profit=3,commission=-.2,swap=-.1,fee=-.01)]
+ledger=dict(worker=worker,account=123456,server='OctaFX-Demo',observedAt=iso(clock_now),historyCursor=iso(clock_now),deals=deals,positions=[],balance=10003,equity=10003)
+api('/feed/execution/ledger',ledger);api('/feed/execution/ledger',ledger)
+report=api('/pnl?zone=Asia%2FKolkata',auth=admin)
+assert abs(report['total']['net']-2.69)<.000001 and report['total']['exitDeals']==1 and report['historyAvailable']
+assert len(api('/deals',auth=admin))==1
+assert abs(api('/tracker/'+str(s['id']),auth=admin)['deals'][0]['net']-2.69)<.000001
+api('/feed/execution/release',dict(worker=worker))
+# Browser cookie session survives page reload; CSRF protects cookie writes.
+import http.cookiejar
+jar=http.cookiejar.CookieJar();browser=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+def browser_api(path,method='GET',body=None,headers=None):
+ req=urllib.request.Request('http://localhost:8080/api'+path,method=method,data=None if body is None else json.dumps(body).encode(),headers={'Content-Type':'application/json',**(headers or {})})
+ with browser.open(req) as res:return json.load(res)
+assert not browser_api('/session')['authenticated']
+browser_api('/session','POST',headers={'Authorization':admin})
+state=browser_api('/session');assert state['authenticated']
+assert browser_api('/me')['app']=='KMR Market'
+try:browser_api('/session','DELETE');raise AssertionError('cookie write without CSRF accepted')
+except urllib.error.HTTPError as e:assert e.code==403
+browser_api('/session','DELETE',headers={'X-CSRF-TOKEN':state['csrfToken']})
+assert not browser_api('/session')['authenticated']
+print('MT5 manual orders, lifecycle, P&L ledger and browser session integration checks passed')
 PYTEST

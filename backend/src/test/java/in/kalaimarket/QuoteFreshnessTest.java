@@ -7,7 +7,7 @@ import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.*;
 
 class QuoteFreshnessTest {
- private final AutoSignalService service = new AutoSignalService(null, null, null, null);
+ private final AutoSignalService service = new AutoSignalService(null, null, null, null, null);
 
  private void rejectsQuoteAt(Instant time) {
   var batch = new FeedRequest.QuoteBatch(List.of(new FeedRequest.QuoteItem("BTCUSD", new FeedRequest.Quote(time, 100, 101))));

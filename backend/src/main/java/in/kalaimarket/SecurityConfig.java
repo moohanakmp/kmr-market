@@ -21,8 +21,10 @@ import org.springframework.security.config.http.SessionCreationPolicy;
   return users;
  }
  @Bean SecurityFilterChain security(HttpSecurity http) throws Exception {
-  return http.csrf(c->c.disable()).sessionManagement(s->s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-   .authorizeHttpRequests(a->a.requestMatchers("/api/feed/**").hasAnyRole("ADMIN","FEED").requestMatchers("/api/**").hasRole("ADMIN").requestMatchers("/actuator/health").permitAll().requestMatchers("/actuator/**").denyAll().anyRequest().permitAll())
+  return http.csrf(c->c.requireCsrfProtectionMatcher(req->!java.util.Set.of("GET","HEAD","OPTIONS","TRACE").contains(req.getMethod())&&req.getHeader("Authorization")==null&&req.getSession(false)!=null))
+   .sessionManagement(s->s.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
+   .securityContext(c->c.requireExplicitSave(true).securityContextRepository(new org.springframework.security.web.context.HttpSessionSecurityContextRepository()))
+   .authorizeHttpRequests(a->a.requestMatchers(org.springframework.http.HttpMethod.GET,"/api/session").permitAll().requestMatchers("/api/feed/**").hasAnyRole("ADMIN","FEED").requestMatchers("/api/**").hasRole("ADMIN").requestMatchers("/actuator/health").permitAll().requestMatchers("/actuator/**").denyAll().anyRequest().permitAll())
    .httpBasic(b->b.authenticationEntryPoint((req,res,e)->res.sendError(401))).build();
  }
 }

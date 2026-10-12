@@ -9,7 +9,9 @@ public record TradePlanView(Long id, String symbol, TradePlan.Direction directio
  Long sourceSignalId, Timeframe timeframe, AutoSignal.Status status,
  BigDecimal tp1, Boolean trackingGap, Instant expiresAt,
  BrokerExecution.Status brokerStatus, Long orderTicket, Long positionTicket, String brokerMessage,
- BigDecimal brokerStopLoss, BigDecimal brokerTakeProfit) {
- public String getSource() {return sourceSignalId == null ? "MANUAL" : "MT5";}
- public BigDecimal getTp2() {return sourceSignalId == null ? null : target;}
+ BigDecimal brokerStopLoss, BigDecimal brokerTakeProfit,
+ String strategy, java.util.List<BigDecimal> targets, AutoSignal.PendingKind pendingKind,
+ BigDecimal brokerEntryPrice, BigDecimal volume, Integer reachedTarget, Integer protectedTarget, String closeReason, Instant brokerUpdatedAt) {
+ public String getSource() {return sourceSignalId == null || "MANUAL_PENDING_V1".equals(strategy) ? "MANUAL" : "MT5";}
+ public BigDecimal getTp2() {return targets!=null&&targets.size()>1?targets.get(1):null;}
 }

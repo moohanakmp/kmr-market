@@ -26,6 +26,7 @@ import org.springframework.stereotype.Component;
   double entry=a.direction()==TradePlan.Direction.BUY?Math.max(bars.get(bars.size()-1).high(),q.ask())+a.atr()*0.1:Math.min(bars.get(bars.size()-1).low(),q.bid())-a.atr()*0.1;
   double sign=a.direction()==TradePlan.Direction.BUY?1:-1,risk=a.atr()*1.5;
   s.entry=AutoSignal.price(entry);s.stopLoss=AutoSignal.price(entry-sign*risk);s.tp1=AutoSignal.price(entry+sign*risk);s.tp2=AutoSignal.price(entry+sign*risk*2);
+  s.targets=List.of(s.tp1,s.tp2,AutoSignal.price(entry+sign*risk*3));
   s.sourceBar=bars.get(bars.size()-1).closedAt();s.createdAt=now;s.updatedAt=now;s.lastQuoteAt=q.time();s.expiresAt=now.plusSeconds(tf.seconds*3);
   return s;
  }
@@ -34,18 +35,21 @@ import org.springframework.stereotype.Component;
   if(q.time().isBefore(now.minusSeconds(90))||q.time().isAfter(now.plusSeconds(30)))return;
   if(q.time().isAfter(s.lastQuoteAt.plusSeconds(120)))s.trackingGap=true;
   s.lastQuoteAt=q.time();
+  if(s.status==AutoSignal.Status.PENDING&&s.trackingGap){s.status=!now.isBefore(s.expiresAt)?AutoSignal.Status.EXPIRED:AutoSignal.Status.CANCELLED;s.cancelRequested=true;s.updatedAt=now;return;}
   boolean buy=s.direction==TradePlan.Direction.BUY;double enter=buy?q.ask():q.bid(),exit=buy?q.bid():q.ask();
   if(s.status==AutoSignal.Status.PENDING){
    if(!now.isBefore(s.expiresAt)){s.status=AutoSignal.Status.EXPIRED;}
-   else if(buy?enter>=s.entry.doubleValue():enter<=s.entry.doubleValue()){
+   else if(s.pendingKind==AutoSignal.PendingKind.LIMIT?(buy?enter<=s.entry.doubleValue():enter>=s.entry.doubleValue()):(buy?enter>=s.entry.doubleValue():enter<=s.entry.doubleValue())){
     // A sampled quote beyond TP1 is a missed entry, never a fabricated immediate TP.
     if(buy?exit>=s.tp1.doubleValue():exit<=s.tp1.doubleValue())s.status=AutoSignal.Status.MISSED;
     else{s.status=AutoSignal.Status.ACTIVE;s.activatedAt=now;}
-   } else if(buy?exit<=s.stopLoss.doubleValue():exit>=s.stopLoss.doubleValue())s.status=AutoSignal.Status.EXPIRED;
-  }else if(s.status==AutoSignal.Status.ACTIVE||s.status==AutoSignal.Status.TP1){
+   } else if(buy?exit<=s.stopLoss.doubleValue():exit>=s.stopLoss.doubleValue())s.status=AutoSignal.Status.STOPPED;
+  }else if(s.status==AutoSignal.Status.ACTIVE||s.status==AutoSignal.Status.TP1||s.status==AutoSignal.Status.TP2||s.status==AutoSignal.Status.TP3||s.status==AutoSignal.Status.TARGET){
    if(buy?exit<=s.stopLoss.doubleValue():exit>=s.stopLoss.doubleValue())s.status=AutoSignal.Status.STOPPED;
-   else if(buy?exit>=s.tp2.doubleValue():exit<=s.tp2.doubleValue())s.status=AutoSignal.Status.TP2;
-   else if(buy?exit>=s.tp1.doubleValue():exit<=s.tp1.doubleValue())s.status=AutoSignal.Status.TP1;
+   else {
+    var levels=s.getTargets();for(int i=0;i<levels.size();i++)if(buy?exit>=levels.get(i).doubleValue():exit<=levels.get(i).doubleValue())s.reachedTarget=Math.max(s.reachedTarget,i+1);
+    if(s.reachedTarget>0)s.status=s.reachedTarget==1?AutoSignal.Status.TP1:s.reachedTarget==2?AutoSignal.Status.TP2:s.reachedTarget==3?AutoSignal.Status.TP3:AutoSignal.Status.TARGET;
+   }
   }
   s.updatedAt=now;
  }

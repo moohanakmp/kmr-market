@@ -11,3 +11,4 @@ CREATE TABLE trade_plan (
 );
 CREATE INDEX trade_plan_created_idx ON trade_plan(created_at DESC);
 INSERT INTO watch_item(symbol) VALUES ('XAUUSD'),('EURUSD'),('GBPUSD');
+
