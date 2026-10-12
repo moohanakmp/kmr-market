@@ -2,8 +2,10 @@
 
 Use this route to test KMR signals while your own PC is switched off. Keep KMR's
 React/Java app on Render and PostgreSQL on Neon. The EC2 Windows machine runs
-only your broker's MT5 desktop terminal and the existing Python data bridge.
-No broker order execution is enabled by this guide.
+your broker's MT5 desktop terminal, the Python data bridge, and optionally the
+demo execution worker. All three must run on the remote Windows machine for
+signals and demo orders to continue while your own PC is off. The supplied
+executor rejects live accounts; see DEMO_EXECUTION.md for its execution policy.
 
 ## Check account eligibility first
 
@@ -21,6 +23,26 @@ does not create accounts or upgrade plans.
 AWS references:
 - https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/free-tier-plans.html
 - https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-free-tier-usage.html
+
+## Check the app and database quotas too
+
+This is a temporary cloud demo trial, not an unlimited free 24/7 service.
+Render Free web services have 750 instance hours per workspace per month, idle
+spin-down after 15 minutes, bandwidth limits, and possible restarts. The active
+bridge and executor send real requests, but this does not guarantee availability.
+
+Neon Free currently includes 100 CU-hours per project per month. At 0.25 CU,
+this covers about 400 active hours. For comparison, 30 days of continuous
+database activity at 0.25 CU would use 180 CU-hours. This is an estimate from
+the published allowance, not a measurement of your project. Frequent feed
+updates and executor polling can keep the database active, and larger compute
+sizes use credits faster. Check actual usage in the Neon console. Moving MT5
+to EC2 does not remove this database limit. A full month of uninterrupted
+operation may require a different database hosting plan.
+
+References:
+- https://render.com/docs/free
+- https://neon.com/blog/neon-free-plan-1-gb-per-project
 
 ## Launch one Windows instance after eligibility is confirmed
 
@@ -62,7 +84,7 @@ The RDP Administrator login, broker MT5 login and KMR feed login are separate.
 AWS connection reference:
 https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/EC2_GetStarted.html
 
-## Install the bridge inside the remote Windows desktop
+## Install MT5 and both workers inside the remote Windows desktop
 
 All installation and commands below run ON THE EC2 DESKTOP, not on your home PC.
 Install Git for Windows and Windows Python 3.11 x64 using their official
@@ -75,6 +97,11 @@ installers. Windows Server may not have winget preinstalled.
 Open Octa MT5 inside the remote desktop and sign in to your existing demo
 account. Confirm the account number and server against your Octa account
 details. Keep the terminal open. Do not enter the broker password in Render.
+To enable demo execution, check Allow algorithmic trading in Tools > Options >
+Experts, uncheck Disable algorithmic trading via external Python API, and keep
+the account-change protection checked. Ensure the Algo Trading toolbar button
+is enabled. Keep the existing Render MT5_DEMO_ACCOUNT and MT5_DEMO_SERVER
+binding set to this same demo account/server.
 
 Open a new PowerShell window on the remote desktop:
 
@@ -87,6 +114,12 @@ git clone https://github.com/moohanakmp/kmr-market.git
 Set-Location kmr-market
 py -3.11 -m venv .venv-mt5
 .\.venv-mt5\Scripts\python.exe -m pip install -r bridge/requirements.txt
+```
+
+Before starting the cloud feed, stop the local data bridge on your home PC
+with Ctrl+C. Then run the following INSIDE the EC2 project folder:
+
+```powershell
 .\.venv-mt5\Scripts\python.exe bridge/mt5_bridge.py --url https://kmr-market.onrender.com --broker-utc-offset-hours 3
 ```
 
@@ -102,14 +135,45 @@ the installed terminal64.exe path, as described in AUTO_SIGNALS.md.
 If broker symbols differ, configure the supplied symbol-map JSON and add
 --symbol-map bridge/symbol-map.json. Do not guess which contract to scan.
 
+## Start the cloud demo executor
+
+Stop the existing executor on your home PC with Ctrl+C before starting the
+cloud executor. This normally releases the single-worker backend lease. After
+an abnormal exit the cloud worker may need to wait up to five minutes for the
+lease to expire. Do not run two executors for the same account.
+
+Keep the remote data bridge running. Open a SECOND PowerShell window INSIDE
+the cloud desktop. Enter the numeric demo account number at the prompt, not
+the broker password or KMR feed password:
+
+```powershell
+Set-Location "$env:USERPROFILE\Projects\kmr-market"
+$demoAccount = [long](Read-Host "Enter MT5 demo account number (digits only)")
+.\.venv-mt5\Scripts\python.exe bridge/mt5_executor.py --url https://kmr-market.onrender.com --execute-demo --account $demoAccount --server OctaFX-Demo --broker-utc-offset-hours 3
+```
+
+Enter the existing Render MT5_FEED_PASSWORD only at the hidden KMR feed
+password prompt. The startup should display DEMO execution enabled. Use the
+same --terminal path and --symbol-map file for both processes if configured.
+The cloud worker retains 0.01 lots, separate 5-pending and 5-open limits per
+commodity, the eight enabled timeframes, TP2 and the existing TP1 SL rule.
+Starting the worker does not prove an order was submitted: only eligible
+signals are sent, and broker acceptance must be checked separately.
+Manual plans created with Save plan remain planning records. This executor
+consumes automatic signals only; moving it to the cloud does not enable
+manual-plan submission to MT5.
+
 ## Validate before switching off your PC
 
-Stop the old bridge on your home PC with Ctrl+C once the remote bridge is
-running. One active bridge per account/watchlist avoids competing feed sources.
+Confirm both local workers have stopped. One active bridge and one executor
+per account avoid competing feed sources and conflicting broker management.
 Check the KMR web app: at least the currently trading instruments should show
 accepted scanner activity and fresh streams when sufficient history is loaded.
 Closed markets and missing 220-bar history may leave individual streams waiting.
 Signals appear only when strategy conditions match.
+Check the cloud executor output for preflight or API errors. When an eligible
+signal is accepted, check MT5 Toolbox > Trade and KMR Trade plans for the
+actual broker execution status, ticket and reported SL/TP.
 
 Disconnect the RDP window while leaving the remote MT5 and PowerShell processes
 open. Disconnecting RDP normally keeps the session running; signing out ends
@@ -119,8 +183,10 @@ turning off your own PC. The EC2 instance itself must remain running.
 
 This first trial uses a logged-in remote Windows session. Automatic recovery
 after Windows reboots or crashes is not configured by these commands. Reconnect,
-log into MT5 and restart the bridge if the session ends. A supervised startup
-configuration is a separate next step after the cloud feed is verified.
+log into MT5 and restart BOTH workers if the session ends. Dynamic TP1 SL
+management stops when the executor stops, while broker-accepted SL, TP2 and
+pending expiry remain. A supervised startup configuration is a separate next
+step after the cloud feed and demo executor are verified.
 
 ## Finish the trial
 
