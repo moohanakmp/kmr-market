@@ -7,7 +7,9 @@ import java.time.Instant;
 public record TradePlanView(Long id, String symbol, TradePlan.Direction direction,
  BigDecimal entry, BigDecimal stopLoss, BigDecimal target, Instant createdAt,
  Long sourceSignalId, Timeframe timeframe, AutoSignal.Status status,
- BigDecimal tp1, Boolean trackingGap, Instant expiresAt) {
+ BigDecimal tp1, Boolean trackingGap, Instant expiresAt,
+ BrokerExecution.Status brokerStatus, Long orderTicket, Long positionTicket, String brokerMessage,
+ BigDecimal brokerStopLoss, BigDecimal brokerTakeProfit) {
  public String getSource() {return sourceSignalId == null ? "MANUAL" : "MT5";}
  public BigDecimal getTp2() {return sourceSignalId == null ? null : target;}
 }

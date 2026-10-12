@@ -4,7 +4,7 @@ Java 21 / Spring Boot 3.5.6, React 19 / TypeScript / Vite, PostgreSQL 17/18.
 Personal, single-admin starter: watchlist CRUD, manual trade-plan CRUD, price validation,
 reward/risk display, database migrations, responsive UI, health endpoint and CI/CD.
 This is a new starter, not a migration of the previous KMR scanner. Live quotes and automatic signals are supplied by the Windows MT5 bridge.
-Broker orders, backtesting and P&L accounting are not implemented. Redis and Kubernetes/Devtron are unnecessary for this first version.
+Optional demo broker orders are supported by the separate MT5 execution worker. Live-account execution, backtesting and P&L accounting are not implemented. Redis and Kubernetes/Devtron are unnecessary for this first version.
 
 ## Architecture
 
@@ -206,7 +206,17 @@ will not automatically reverse DB migrations.
 
 External integrations: introduce server-side provider interfaces, timeouts, retry
 policy and provider-specific credentials as environment secrets. Select the broker
-and supported API before implementing execution. MT5 terminal bridging requires a
+and supported API before extending execution beyond the supplied demo worker. MT5 terminal bridging requires a
 running Windows terminal/bridge; see AUTO_SIGNALS.md for the supplied bridge. Start with demo-account execution,
 idempotent order submission, reconciliation, limits and an explicit kill switch.
 Do not use free-tier sleep-prone hosting for unattended live orders.
+
+## Optional demo broker execution
+
+See [DEMO_EXECUTION.md](DEMO_EXECUTION.md) for the opt-in Windows worker: exact
+0.01 lots, separate limits of five pending and five open per instrument, TP2
+take-profit, and TP1 SL protection. Only M1/M5/M15/M30/H1/D1/W1/MN1 are enabled
+for new scans and entries. Real broker accounts are rejected. Demo account binding
+is configured privately in Render; default account 0 disables execution claims.
+The data bridge stays read-only, and the execution worker must be started
+separately with --execute-demo.

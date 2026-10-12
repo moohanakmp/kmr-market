@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 import MetaTrader5 as mt5
 import requests
 
-TIMEFRAMES = "M1 M2 M3 M4 M5 M6 M10 M12 M15 M20 M30 H1 H2 H3 H4 H6 H8 H12 D1 W1 MN1".split()
+TIMEFRAMES = "M1 M5 M15 M30 H1 D1 W1 MN1".split()
 
 def iso(epoch):
     return datetime.fromtimestamp(int(epoch), timezone.utc).isoformat().replace("+00:00", "Z")
@@ -135,7 +135,7 @@ def run(args):
         print(f"KMR server clock synchronized. Windows clock difference: {time.time() - clock.now():+.1f}s.")
         print(f"Broker timestamp setting: UTC{offset_seconds / 3600:+g}h; subtracting {offset_seconds:g}s from quotes and candles.")
         print("KMR feed authenticated and connected to MT5. Read-only: no orders are submitted.")
-        print("Scanning all 21 MT5 timeframes. Keep this terminal and MT5 open.")
+        print("Scanning M1 M5 M15 M30 H1 D1 W1 MN1. Keep this terminal and MT5 open.")
         while True:
             now = time.monotonic()
             try:

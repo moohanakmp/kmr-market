@@ -5,4 +5,5 @@ import java.util.*;
 public interface AutoSignalRepository extends JpaRepository<AutoSignal,Long> {
  List<AutoSignal> findBySymbolAndStatusIn(String symbol,Collection<AutoSignal.Status> status);
  boolean existsBySymbolAndTimeframeAndSourceBar(String symbol,Timeframe timeframe,Instant bar);
+ List<AutoSignal> findByTimeframeIn(Collection<Timeframe> frames,org.springframework.data.domain.Pageable page);
 }

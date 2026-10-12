@@ -20,6 +20,7 @@ import org.springframework.http.HttpStatus;
   for(var state:scans.findBySymbol(symbol))if(state.lastQuoteAt==null||q.time().isAfter(state.lastQuoteAt)){state.lastQuoteAt=q.time();state.receivedAt=now;}
  }
  @Transactional public Map<String,Object> ingest(FeedRequest r){
+  if(!Timeframe.enabled().contains(r.timeframe()))reject("Timeframe is disabled; enabled: M1 M5 M15 M30 H1 D1 W1 MN1");
   Instant now=Instant.now();validateQuote(r.quote(),now);lock(r.symbol());
   Instant last=null;
   for(var c:r.candles()){

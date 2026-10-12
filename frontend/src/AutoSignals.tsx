@@ -14,7 +14,7 @@ export default function AutoSignals({auth}:{auth:string}){
  const filtered=signals.filter(s=>(tf==='ALL'||tf===s.timeframe)&&(symbol==='ALL'||symbol===s.symbol));
  const scans=scanner?.scans.filter(s=>(tf==='ALL'||tf===s.timeframe)&&(symbol==='ALL'||symbol===s.symbol))||[];
  return <section className="autosignals"><div className="sectionhead"><h2>Auto Signals <span className="badge">MT5</span></h2><b className={fresh?'buy':'sell'}>{fresh?'Live feed':'Waiting for MT5 feed'}</b></div>
- <p>EMA breakout strategy · All 21 timeframes · Sampled quote tracking · No broker orders</p>
+ <p>EMA breakout strategy · M1 · M5 · M15 · M30 · H1 · D1 · W1 · MN1 · Sampled quote tracking · Signal tracking; broker execution shown in Trade plans</p>
  <p>Quality is a rule score, not a win probability. Strategy has not been backtested or calibrated to your broker.</p>
  {error&&<p role="alert" className="error">{error}</p>}
  <div className="filters"><label>Instrument<select value={symbol} onChange={e=>setSymbol(e.target.value)}><option value="ALL">All instruments</option>{symbols.map(s=><option key={s}>{s}</option>)}</select></label><label>Timeframe<select value={tf} onChange={e=>setTf(e.target.value)}><option value="ALL">All timeframes</option>{scanner?.timeframes.map(t=><option key={t}>{t}</option>)}</select></label><div><small>FRESH STREAMS</small><h2>{fresh} / {scanner?.scans.length||0}</h2></div></div>

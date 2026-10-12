@@ -49,9 +49,9 @@ For several MT5 terminals, specify:
 
 ## Timeframes and history
 
-All 21 standard MT5 timeframes are supported:
-M1, M2, M3, M4, M5, M6, M10, M12, M15, M20, M30,
-H1, H2, H3, H4, H6, H8, H12, D1, W1, MN1.
+Enabled MT5 timeframes: M1, M5, M15, M30, H1, D1, W1, MN1.
+Older saved history on other timeframes is retained, but no new scans or demo
+entries are made for disabled timeframes.
 The same strategy runs independently on each timeframe.
 At least 220 closed bars are required for EMA200. Some brokers do not supply
 that much weekly/monthly history; those streams wait rather than inventing data.
@@ -142,6 +142,7 @@ Feed user can access only:
 - GET /api/feed/time (server UTC for freshness checks)
 - POST /api/feed/candles
 - POST /api/feed/quotes
+- GET/POST /api/feed/execution/* (optional demo worker policy, lease and execution tracking; see DEMO_EXECUTION.md)
 
 Admin views /api/signals and /api/scanner and retains existing watchlist/plans.
 Credentials are Basic auth over HTTPS. The bridge prompts for its password and
@@ -149,8 +150,8 @@ never stores it in source. Environment variable MT5_FEED_PASSWORD is optionally
 accepted for controlled process automation. Redirects are disabled, so feed
 credentials are not forwarded to a different host.
 
-No order_send / trade execution function is called. Broker integration for
-execution requires a separate implementation and explicit demo-account validation.
+The data bridge never calls order_send. Optional demo execution is a separate
+Windows process; see DEMO_EXECUTION.md for its fixed-volume policy and startup.
 
 ## Automatically saved trade plans
 

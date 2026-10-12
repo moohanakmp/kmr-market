@@ -46,7 +46,7 @@ Windows compute, storage and public IPv4 usage draw from applicable credits.
 No load balancer, NAT gateway or extra database is needed for this bridge.
 
 Two GB is an initial test configuration, not a performance guarantee. Monitor
-memory and CPU during the 21-timeframe initial history load. Restrict the
+memory and CPU during the eight-timeframe initial history load. Restrict the
 watchlist if needed before considering a larger, potentially ineligible instance.
 
 ## Connect to the cloud desktop

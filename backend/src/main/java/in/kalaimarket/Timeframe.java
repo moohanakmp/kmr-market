@@ -4,4 +4,5 @@ public enum Timeframe {
  H1(3600), H2(7200), H3(10800), H4(14400), H6(21600), H8(28800), H12(43200), D1(86400), W1(604800), MN1(2592000);
  public final long seconds;
  Timeframe(long seconds){this.seconds=seconds;}
+ public static java.util.List<Timeframe> enabled(){return java.util.List.of(M1,M5,M15,M30,H1,D1,W1,MN1);}
 }

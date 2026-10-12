@@ -40,7 +40,7 @@ jobs:
         working-directory: frontend
       - run: mvn -B verify
         working-directory: backend
-      - name: Test MT5 bridge clock and quote freshness
+      - name: Test MT5 feed and demo execution with offline broker
         run: python3 -m unittest discover -s bridge -p 'test_*.py' -v
       - name: Test existing-signal plan migration
         run: bash scripts/test-plan-migration.sh

@@ -25,6 +25,8 @@ services:
       ADMIN_USERNAME: ${ADMIN_USERNAME:-kalai}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
       MT5_FEED_PASSWORD: ${MT5_FEED_PASSWORD:-}
+      MT5_DEMO_ACCOUNT: ${MT5_DEMO_ACCOUNT:-0}
+      MT5_DEMO_SERVER: ${MT5_DEMO_SERVER:-OctaFX-Demo}
     depends_on:
       db:
         condition: service_healthy

@@ -11,8 +11,8 @@ import java.util.*;
  @GetMapping("/api/feed/time") public Map<String,Object> feedTime(){return Map.of("serverTime",Instant.now());}
  @PostMapping("/api/feed/candles") public Map<String,Object> ingest(@Valid @RequestBody FeedRequest r){return service.ingest(r);}
  @PostMapping("/api/feed/quotes") public Map<String,String> quotes(@Valid @RequestBody FeedRequest.QuoteBatch r){service.quotes(r);return Map.of("status","ACCEPTED");}
- @GetMapping("/api/signals") public List<AutoSignal> signals(){return signals.findAll(PageRequest.of(0,250,Sort.by("createdAt").descending())).getContent();}
+ @GetMapping("/api/signals") public List<AutoSignal> signals(){return signals.findByTimeframeIn(Timeframe.enabled(),PageRequest.of(0,250,Sort.by("createdAt").descending()));}
  @GetMapping("/api/scanner") public Map<String,Object> scanner(){
-  return Map.of("strategy","EMA_BREAKOUT_V1","mode","OBSERVED_QUOTES","timeframes",Timeframe.values(),"serverTime",Instant.now(),"scans",scans.findAll(Sort.by("symbol","timeframe")));
+  return Map.of("strategy","EMA_BREAKOUT_V1","mode","OBSERVED_QUOTES","timeframes",Timeframe.enabled(),"serverTime",Instant.now(),"scans",scans.findAll(Sort.by("symbol","timeframe")).stream().filter(s->Timeframe.enabled().contains(s.timeframe)).toList());
  }
 }

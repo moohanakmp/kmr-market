@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-export DB_PASSWORD=ci-only-password ADMIN_PASSWORD=ci-admin-password-long MT5_FEED_PASSWORD=ci-feed-password-long
+export DB_PASSWORD=ci-only-password ADMIN_PASSWORD=ci-admin-password-long MT5_FEED_PASSWORD=ci-feed-password-long MT5_DEMO_ACCOUNT=123456
 # Reproduce Neon: non-empty public schema, no Flyway history, limited app role.
 PGPASSWORD=ci-only-password psql -h localhost -U kmr -d kmr -v ON_ERROR_STOP=1 <<'SQL'
 CREATE TABLE public.unrelated_data (id integer PRIMARY KEY);
@@ -11,7 +11,7 @@ CREATE SCHEMA kmr;
 GRANT USAGE, CREATE ON SCHEMA kmr TO kmr_ci;
 SQL
 # GitHub service PostgreSQL is reachable on the Linux host network.
-docker run -d --name kmr-test --network host -e JDBC_DATABASE_URL=jdbc:postgresql://localhost:5432/kmr -e DB_USERNAME=kmr_ci -e DB_SCHEMA=kmr -e DB_PASSWORD -e ADMIN_PASSWORD -e MT5_FEED_PASSWORD kmr:ci >/dev/null
+docker run -d --name kmr-test --network host -e JDBC_DATABASE_URL=jdbc:postgresql://localhost:5432/kmr -e DB_USERNAME=kmr_ci -e DB_SCHEMA=kmr -e DB_PASSWORD -e ADMIN_PASSWORD -e MT5_FEED_PASSWORD -e MT5_DEMO_ACCOUNT kmr:ci >/dev/null
 trap 'docker logs kmr-test; docker rm -f kmr-test >/dev/null' EXIT
 ready=false
 for attempt in $(seq 1 60); do
@@ -83,6 +83,30 @@ p=linked_plan()
 assert p['source']=='MT5' and p['timeframe']=='M1' and p['status']=='PENDING'
 assert p['entry']==s['entry'] and p['stopLoss']==s['stopLoss'] and p['tp1']==s['tp1'] and p['tp2']==s['tp2'] and p['target']==s['tp2']
 assert p['createdAt']==s['createdAt']
+cfg=api('/feed/execution/config')
+assert cfg['volume']==0.01 and cfg['maxPendingPerSymbol']==5 and cfg['maxOpenPerSymbol']==5
+assert cfg['timeframes']==['M1','M5','M15','M30','H1','D1','W1','MN1']
+worker='11111111-1111-4111-8111-111111111111'
+other='22222222-2222-4222-8222-222222222222'
+api('/feed/execution/lease',dict(worker=worker))
+try:api('/feed/execution/lease',dict(worker=other));raise AssertionError('competing executor accepted')
+except urllib.error.HTTPError as e:assert e.code==409
+try:api('/feed/execution/claim',dict(worker=worker,account=999,server='OctaFX-Demo',signalId=s['id']));raise AssertionError('wrong account accepted')
+except urllib.error.HTTPError as e:assert e.code==403
+claim=dict(worker=worker,account=123456,server='OctaFX-Demo',signalId=s['id'])
+assert api('/feed/execution/claim',claim)['status']=='CLAIMED'
+try:api('/feed/execution/claim',claim);raise AssertionError('duplicate execution claim accepted')
+except urllib.error.HTTPError as e:assert e.code==409
+api('/feed/execution/report',dict(worker=worker,signalId=s['id'],status='BROKER_PENDING',orderTicket=777,brokerStopLoss=s['stopLoss'],brokerTakeProfit=s['tp2'],message='CI synthetic acknowledgement; no broker called'))
+assert linked_plan()['brokerStatus']=='BROKER_PENDING' and linked_plan()['orderTicket']==777
+assert linked_plan()['brokerStopLoss']==s['stopLoss'] and linked_plan()['brokerTakeProfit']==s['tp2']
+api('/feed/execution/report',dict(worker=worker,signalId=s['id'],status='OPEN',orderTicket=777,positionTicket=888,message='CI synthetic position'))
+assert linked_plan()['positionTicket']==888 and linked_plan()['brokerStatus']=='OPEN'
+api('/feed/execution/report',dict(worker=worker,signalId=s['id'],status='CLOSED',message='CI synthetic closure'))
+assert api('/feed/execution/tracked')==[]
+api('/feed/execution/release',dict(worker=worker))
+api('/feed/execution/lease',dict(worker=other))
+api('/feed/execution/release',dict(worker=other))
 manual=[p for p in api('/plans',auth=admin) if p['source']=='MANUAL']
 assert len(manual)==1 and manual[0]['entry']==2000 and manual[0]['target']==2020 and manual[0]['timeframe'] is None
 # Bad future candle or stale quote cannot create a new setup.
@@ -103,6 +127,6 @@ assert linked_plan()['status']=='MISSED' and linked_plan()['id']==p['id']
 assert api('/feed/candles',payload)['status']=='UNCHANGED'
 assert len(api('/signals',auth=admin))==1
 assert linked_plan()['id']==p['id']
-assert len(api('/scanner',auth=admin)['timeframes'])==21
+assert api('/scanner',auth=admin)['timeframes']==['M1','M5','M15','M30','H1','D1','W1','MN1']
 print('MT5 signal integration checks passed')
 PYTEST
