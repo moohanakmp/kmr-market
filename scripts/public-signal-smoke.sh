@@ -18,12 +18,16 @@ admin='Basic '+base64.b64encode(b'kalai:ci-admin-password-long').decode()
 feed='Basic '+base64.b64encode(b'mt5_feed:ci-feed-password-long').decode()
 def api(path,data=None,auth=admin):
  req=urllib.request.Request('http://localhost:8081/api'+path,data=None if data is None else json.dumps(data).encode(),headers={'Authorization':auth,'Content-Type':'application/json'})
- with urllib.request.urlopen(req,timeout=30) as r:return json.load(r)
+ try:
+  with urllib.request.urlopen(req,timeout=30) as r:return json.load(r)
+ except urllib.error.HTTPError as e:
+  print('API failure:',path,'HTTP',e.code,e.read().decode()[:1000]);raise
 fixture=json.loads(Path('backend/src/test/resources/v28-btc-fixture.json').read_text());now=int(time.time()*1000);shift=now-fixture['now']
 for key in ('c5','c15','h1','h4'):
  for b in fixture[key]:b['t']+=shift
 fixture.update(now=now,quoteAt=now,calendarAt=now)
 assert api('/market/public-status')['mt5Purpose']=='ORDER_EXECUTION_ONLY'
+api('/watchlist',{'symbol':'BTCUSD'})
 analysis=api('/market/public-snapshot',fixture)
 assert analysis['auto']['entryType']=='MARKET' and analysis['scan']['score']==98
 signals=[s for s in api('/signals') if s['strategy']=='KMR_V28_PUBLIC']
