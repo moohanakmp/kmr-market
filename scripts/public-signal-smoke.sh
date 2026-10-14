@@ -32,6 +32,12 @@ assert len([p for p in api('/plans') if p['sourceSignalId']==signals[0]['id']])=
 api('/market/public-snapshot',fixture)
 assert len([s for s in api('/signals') if s['strategy']=='KMR_V28_PUBLIC'])==1
 assert api('/market/analysis/BTCUSD')['manual']['entryType']=='MARKET'
+audit=api('/audit?channel=AUTO&signalId='+str(signals[0]['id']))['items']
+created=[e for e in audit if e['event_type']=='SIGNAL_CREATED']
+assert len(created)==1 and created[0]['actor']=='SYSTEM:KMR_V28_PUBLIC'
+assert created[0]['initiated_by']=='USER:kalai'
+assert created[0]['decision_context']['scan']['e20']>0
+assert any(e['event_type']=='MANUAL_ANALYSIS_VIEWED' for e in api('/audit?channel=MANUAL')['items'])
 try:api('/market/public-snapshot',fixture,feed)
 except urllib.error.HTTPError as e:assert e.code==403
 else:raise AssertionError('Executor role must not create public signals')
