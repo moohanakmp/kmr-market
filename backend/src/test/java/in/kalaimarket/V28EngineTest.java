@@ -1,0 +1,21 @@
+package in.kalaimarket;
+import org.junit.jupiter.api.*;import static org.junit.jupiter.api.Assertions.*;
+import com.fasterxml.jackson.databind.*;import java.util.*;
+class V28EngineTest {
+ final ObjectMapper json=new ObjectMapper();final V28Engine engine=new V28Engine(json);
+ static PublicSnapshot fixture(ObjectMapper json)throws Exception{
+  var x=json.readValue(V28EngineTest.class.getResourceAsStream("/v28-btc-fixture.json"),PublicSnapshot.class);long n=System.currentTimeMillis(),shift=n-x.now();
+  java.util.function.Function<List<PublicSnapshot.Bar>,List<PublicSnapshot.Bar>> move=bars->bars.stream().map(b->new PublicSnapshot.Bar(b.t()+shift,b.o(),b.h(),b.l(),b.c(),b.v())).toList();
+  return new PublicSnapshot(x.symbol(),x.source(),n,x.price(),move.apply(x.c5()),move.apply(x.c15()),move.apply(x.h1()),move.apply(x.h4()),List.of(),n,true,n);
+ }
+ @AfterEach void close(){engine.close();}
+ @Test void exactV28FixtureCreatesAutoWithoutMt5()throws Exception{var a=engine.analyze(fixture(json));assertTrue(a.path("auto").isObject(),a.toString());assertEquals(98,a.path("scan").path("score").asInt());assertEquals(12,a.path("scan").path("gates").size());assertEquals("HIGH",a.path("scan").path("tier").asText());assertEquals("MARKET",a.path("auto").path("entryType").asText());}
+ @Test void manualAnalysisDoesNotRequireBroker()throws Exception{var a=engine.analyze(fixture(json));assertTrue(a.path("manual").isObject());assertEquals("CONFIRMED",a.path("manualGrade").asText());}
+ @Test void missingCalendarSuppressesAutoKeepsManual()throws Exception{var x=fixture(json);var a=engine.analyze(new PublicSnapshot(x.symbol(),x.source(),x.quoteAt(),x.price(),x.c5(),x.c15(),x.h1(),x.h4(),List.of(),0,true,x.now()));assertTrue(a.path("auto").isNull());assertTrue(a.path("manual").isObject());assertTrue(a.path("reason").asText().contains("calendar"));}
+ @Test void highImpactNewsPreventsAuto()throws Exception{var x=fixture(json);var a=engine.analyze(new PublicSnapshot(x.symbol(),x.source(),x.quoteAt(),x.price(),x.c5(),x.c15(),x.h1(),x.h4(),List.of(new PublicSnapshot.News(x.now()+600000,"USD release")),x.now(),true,x.now()));assertTrue(a.path("auto").isNull());assertTrue(a.path("manual").isObject());assertEquals("LOWER_CONFIDENCE",a.path("manualGrade").asText());}
+ @Test void stalePublicQuoteRejected()throws Exception{var x=fixture(json);assertThrows(IllegalArgumentException.class,()->engine.analyze(new PublicSnapshot(x.symbol(),x.source(),x.now()-120000,x.price(),x.c5(),x.c15(),x.h1(),x.h4(),x.events(),x.calendarAt(),true,x.now())));}
+ @Test void currentFormingBarExcluded()throws Exception{var x=fixture(json);var c=new ArrayList<>(x.c15());c.add(new PublicSnapshot.Bar(x.now(),100,9999,1,5000,999999));var before=engine.analyze(x);var after=engine.analyze(new PublicSnapshot(x.symbol(),x.source(),x.quoteAt(),x.price(),x.c5(),c,x.h1(),x.h4(),x.events(),x.calendarAt(),true,x.now()));assertEquals(before.path("scan"),after.path("scan"));}
+ @Test void opposingHigherTimeframeShowsLowerConfidencePlan()throws Exception{var x=fixture(json);var h4=x.h4().stream().map(b->new PublicSnapshot.Bar(b.t(),5000-b.o(),5000-b.l(),5000-b.h(),5000-b.c(),b.v())).toList();var a=engine.analyze(new PublicSnapshot(x.symbol(),x.source(),x.quoteAt(),x.price(),x.c5(),x.c15(),x.h1(),h4,x.events(),x.calendarAt(),true,x.now()));assertTrue(a.path("auto").isNull());assertEquals("LOWER_CONFIDENCE",a.path("manualGrade").asText());assertTrue(a.path("manual").isObject());}
+ @Test void staleHigherTimeframeBlocksAuto()throws Exception{var x=fixture(json);var h=x.h4().stream().map(b->new PublicSnapshot.Bar(b.t()-86400000,b.o(),b.h(),b.l(),b.c(),b.v())).toList();var a=engine.analyze(new PublicSnapshot(x.symbol(),x.source(),x.quoteAt(),x.price(),x.c5(),x.c15(),x.h1(),h,x.events(),x.calendarAt(),true,x.now()));assertTrue(a.path("auto").isNull());assertTrue(a.path("blocks").toString().contains("stale"));}
+ @Test void malformedOHLCRejected()throws Exception{var x=fixture(json);var c=new ArrayList<>(x.c15());var b=c.get(0);c.set(0,new PublicSnapshot.Bar(b.t(),b.o(),1,b.l(),b.c(),10));assertThrows(IllegalArgumentException.class,()->engine.analyze(new PublicSnapshot(x.symbol(),x.source(),x.quoteAt(),x.price(),x.c5(),c,x.h1(),x.h4(),x.events(),x.calendarAt(),true,x.now())));}
+}

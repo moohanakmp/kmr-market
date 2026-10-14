@@ -23,9 +23,9 @@ def signal(buy=True):
 
 class Broker:
     ACCOUNT_TRADE_MODE_DEMO=0;ACCOUNT_MARGIN_MODE_RETAIL_HEDGING=2
-    TRADE_ACTION_PENDING=5;TRADE_ACTION_SLTP=6;TRADE_ACTION_REMOVE=8
+    TRADE_ACTION_DEAL=1;TRADE_ACTION_PENDING=5;TRADE_ACTION_SLTP=6;TRADE_ACTION_REMOVE=8
     ORDER_TYPE_BUY=0;ORDER_TYPE_SELL=1;ORDER_TYPE_BUY_STOP=4;ORDER_TYPE_SELL_STOP=5;ORDER_TYPE_BUY_LIMIT=2;ORDER_TYPE_SELL_LIMIT=3
-    POSITION_TYPE_BUY=0;POSITION_TYPE_SELL=1;ORDER_FILLING_RETURN=2;ORDER_TIME_SPECIFIED=2
+    POSITION_TYPE_BUY=0;POSITION_TYPE_SELL=1;ORDER_FILLING_RETURN=2;ORDER_FILLING_IOC=1;ORDER_FILLING_FOK=0;ORDER_TIME_SPECIFIED=2;ORDER_TIME_GTC=0;SYMBOL_TRADE_EXECUTION_MARKET=2
     TRADE_RETCODE_DONE=10009;TRADE_RETCODE_PLACED=10008;TRADE_RETCODE_TIMEOUT=10012;TRADE_RETCODE_CONNECTION=10031
     ORDER_STATE_CANCELED=2;ORDER_STATE_EXPIRED=6;ORDER_STATE_REJECTED=5
     DEAL_ENTRY_IN=0;DEAL_ENTRY_OUT=1;DEAL_ENTRY_OUT_BY=3
@@ -86,6 +86,33 @@ class ExecutionTest(unittest.TestCase):
             b=Broker();setattr(b.account,field,value)
             with self.assertRaises(RuntimeError):ex.account_guard(b)
             self.assertEqual(b.sent,[])
+    def test_public_market_signal_uses_actual_broker_quote(self):
+        self.s.update(strategy='KMR_V28_PUBLIC',pendingKind='MARKET',sourceAtr=5)
+        r=ex.pending_request(self.b,self.s,'XAUUSD',clock,10800)
+        self.assertEqual(r['action'],self.b.TRADE_ACTION_DEAL);self.assertEqual(r['price'],99.1)
+        self.assertEqual(r['volume'],.01);self.assertEqual(r['sl'],90);self.assertEqual(r['tp'],120)
+        self.assertNotIn('expiration',r)
+    def test_market_partial_fill_is_reconciled_never_treated_as_rejected(self):
+        self.s.update(strategy='KMR_V28_PUBLIC',pendingKind='MARKET',sourceAtr=5)
+        self.b.modify_reply=N(retcode=10010,order=900)
+        engine=self.engine();engine.cycle();engine.cycle()
+        self.assertEqual(self.api.records[7]['status'],'UNKNOWN')
+        self.assertEqual(sum(r['action']==self.b.TRADE_ACTION_DEAL for r in self.b.sent),1)
+    def test_public_market_signal_rejects_broker_reference_gap(self):
+        self.s.update(strategy='KMR_V28_PUBLIC',pendingKind='MARKET',sourceAtr=1)
+        with self.assertRaises(ValueError):ex.pending_request(self.b,self.s,'XAUUSD',clock,10800)
+        self.assertEqual(self.b.sent,[])
+    def test_explicit_market_order_does_not_require_pending_expiry_feature(self):
+        self.s.update(strategy='KMR_V28_PUBLIC',pendingKind='MARKET',sourceAtr=5);self.b.info.expiration_mode=0
+        self.assertEqual(ex.pending_request(self.b,self.s,'XAUUSD',clock,10800)['action'],self.b.TRADE_ACTION_DEAL)
+    def test_low_profit_execution_requires_confirmed_fees(self):
+        self.s.update(strategy='KMR_V28_SCALP',pendingKind='MARKET',sourceAtr=5)
+        with patch.dict(ex.os.environ,{},clear=True):
+            with self.assertRaises(ValueError):ex.pending_request(self.b,self.s,'XAUUSD',clock,10800)
+    def test_low_profit_actual_contract_loss_cannot_exceed_four_usd(self):
+        self.s.update(strategy='KMR_V28_SCALP',pendingKind='MARKET',sourceAtr=5)
+        with patch.dict(ex.os.environ,{'MT5_ROUND_TRIP_FEE_PER_LOT_USD':'0'}):
+            with self.assertRaises(ValueError):ex.pending_request(self.b,self.s,'XAUUSD',clock,10800)
     def test_disabled_python_trading_blocks_write(self):
         self.b.terminal.tradeapi_disabled=True
         with self.assertRaises(RuntimeError):self.engine().cycle()

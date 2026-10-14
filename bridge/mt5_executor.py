@@ -1,4 +1,4 @@
-"""Opt-in Octa DEMO executor. Keep the separate market-data bridge running."""
+"""Opt-in Octa DEMO executor. Public KMR data generates signals; MT5 is used only to execute/reconcile orders."""
 import argparse
 from collections import Counter
 from datetime import datetime, timezone, timedelta
@@ -81,7 +81,8 @@ def pending_request(broker, signal, symbol, clock, offset):
     quote = checked_quote(broker.symbol_info_tick(symbol), clock, offset)
     if info is None or not info.volume_min <= VOLUME <= info.volume_max or info.volume_step <= 0 or abs(VOLUME/info.volume_step-round(VOLUME/info.volume_step)) > 1e-7:
         raise ValueError("Broker does not support exactly 0.01 lots for this instrument.")
-    if not info.expiration_mode & 4:
+    market=signal.get('pendingKind')=='MARKET'
+    if not market and not info.expiration_mode & 4:
         raise ValueError("Broker lacks specified pending-order expiry; no GTC fallback is submitted.")
     tick = info.trade_tick_size or info.point
     if tick <= 0:
@@ -93,14 +94,32 @@ def pending_request(broker, signal, symbol, clock, offset):
     target = rounded(levels[-1], tick, buy)
     manual=signal.get('strategy')=='MANUAL_PENDING_V1'
     limit=signal.get('pendingKind','STOP')=='LIMIT'
-    if manual and any(abs(float(v)/tick-round(float(v)/tick))>1e-6 for v in [signal['entry'],signal['stopLoss']]+levels):
+    if manual and any(abs(float(v)/tick-round(float(v)/tick))>1e-6 for v in [signal['stopLoss']]+levels+([] if market else [signal['entry']])):
         raise ValueError('Manual entry, SL and targets must match the broker tick size; no silent price rounding.')
     distance = max(info.trade_stops_level*info.point, tick)
-    atr = abs(float(signal["entry"])-float(signal["stopLoss"]))/1.5
+    atr = float(signal.get('sourceAtr') or abs(float(signal["entry"])-float(signal["stopLoss"]))/1.5)
     if not manual and quote["ask"]-quote["bid"] > atr*0.15:
         raise ValueError("Current broker spread exceeds the signal ATR filter.")
     if buy and quote["bid"] <= stop or not buy and quote["ask"] >= stop:
         raise ValueError("Current quote invalidated the setup before entry.")
+    if market:
+        entry=quote['ask'] if buy else quote['bid']
+        if abs(entry-float(signal['entry']))>atr*.4:
+            raise ValueError('Public reference and actual broker price differ by more than 0.4 ATR; no late execution.')
+        valid=(stop<entry<target and quote['bid']-stop>=distance and target-quote['bid']>=distance) if buy else (target<entry<stop and stop-quote['ask']>=distance and quote['ask']-target>=distance)
+        if not valid:raise ValueError('Actual broker market price violates planned stop or target distances.')
+        if signal.get('strategy')=='KMR_V28_SCALP':
+            loss=broker.order_calc_profit(broker.ORDER_TYPE_BUY if buy else broker.ORDER_TYPE_SELL,symbol,VOLUME,entry,stop)
+            profit=broker.order_calc_profit(broker.ORDER_TYPE_BUY if buy else broker.ORDER_TYPE_SELL,symbol,VOLUME,entry,target)
+            fee=float(os.environ.get('MT5_ROUND_TRIP_FEE_PER_LOT_USD','nan'))*VOLUME
+            if not math.isfinite(fee) or fee<0:raise ValueError('Confirm MT5_ROUND_TRIP_FEE_PER_LOT_USD before executing Low Profit.')
+            if loss is None or profit is None or abs(loss)+fee>4 or profit-fee<1:raise ValueError('Broker 0.01-lot contract cannot meet the $1 net target within $4 risk.')
+        flags=getattr(info,'filling_mode',0)
+        if flags&2:filling=broker.ORDER_FILLING_IOC
+        elif flags&1:filling=broker.ORDER_FILLING_FOK
+        elif getattr(info,'trade_exemode',None)!=getattr(broker,'SYMBOL_TRADE_EXECUTION_MARKET',2):filling=broker.ORDER_FILLING_RETURN
+        else:raise ValueError('No supported broker filling mode for the market order.')
+        return dict(action=broker.TRADE_ACTION_DEAL,symbol=symbol,volume=VOLUME,type=broker.ORDER_TYPE_BUY if buy else broker.ORDER_TYPE_SELL,price=entry,sl=stop,tp=target,deviation=10,magic=MAGIC,comment=f"KMR:{signal['id']}",type_filling=filling,type_time=broker.ORDER_TIME_GTC)
     if buy:
         valid = stop < entry < target and (quote["ask"]-entry if limit else entry-quote["ask"]) >= distance and entry-stop >= distance and target-entry >= distance
     else:
@@ -382,10 +401,11 @@ class Executor:
                 request = pending_request(self.broker,signal,symbol,self.clock,self.offset)
                 account_guard(self.broker)
                 result = self.broker.order_send(request)
-                if result is None or result.retcode in (self.broker.TRADE_RETCODE_TIMEOUT,self.broker.TRADE_RETCODE_CONNECTION):
+                if result is None or result.retcode in (self.broker.TRADE_RETCODE_TIMEOUT,self.broker.TRADE_RETCODE_CONNECTION,getattr(self.broker,'TRADE_RETCODE_DONE_PARTIAL',10010)):
                     self.report(sid,"UNKNOWN","Broker reply uncertain; reconcile history, never resend")
                 elif result.retcode in (self.broker.TRADE_RETCODE_DONE,self.broker.TRADE_RETCODE_PLACED):
-                    self.report(sid,"BROKER_PENDING",f"Submitted 0.01 lots with SL and final TP; code {result.retcode}",result.order,sl=request['sl'],tp=request['tp'],brokerEntryPrice=request['price'],volume=request['volume'])
+                    # Submission acceptance is not a proven broker position. Reconciliation confirms OPEN.
+                    self.report(sid,"BROKER_PENDING",f"Submitted 0.01 lots with SL and final TP; code {result.retcode}",result.order,sl=request['sl'],tp=request['tp'],brokerEntryPrice=getattr(result,'price',None) or request['price'],volume=request['volume'])
                     print(f"Signal {sid}: MT5 order {result.order} submitted for {symbol} at 0.01 lots.",flush=True)
                 else:
                     self.report(sid,"REJECTED",f"Broker rejected entry, code {result.retcode}")

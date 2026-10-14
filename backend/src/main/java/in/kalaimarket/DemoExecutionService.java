@@ -37,7 +37,7 @@ import org.springframework.beans.factory.annotation.Value;
   var e=new BrokerExecution();e.signalId=id;e.accountLogin=account;e.brokerServer=server;e.worker=worker;e.status=BrokerExecution.Status.CLAIMED;e.message="Reserved before broker submission; never automatically resend";e.createdAt=now;e.updatedAt=now;
   executions.save(e);event(e);return e;
  }
- @Transactional public void note(String worker,long id,String message){guard(worker);var s=signals.findById(id).orElseThrow();s.executionNote=message;}
+ @Transactional public void note(String worker,long id,String message){guard(worker);var s=signals.findById(id).orElseThrow();s.activityActor="MT5_WORKER:"+worker;s.executionNote=message;}
  private void event(BrokerExecution e){var x=new ExecutionEvent();x.signalId=e.signalId;x.status=e.status.name();x.message=e.message;x.observedAt=e.updatedAt;x.stopLoss=e.brokerStopLoss;x.takeProfit=e.brokerTakeProfit;x.reachedTarget=e.reachedTarget;x.protectedTarget=e.protectedTarget;events.save(x);}
  @Transactional public BrokerExecution report(String worker,long id,BrokerExecution.Status status,Long order,Long position,String message,BigDecimal sl,BigDecimal tp){return report(worker,id,status,order,position,message,sl,tp,null,null,null,null,null,null,null);}
  @Transactional public BrokerExecution report(String worker,long id,BrokerExecution.Status status,Long order,Long position,String message,BigDecimal sl,BigDecimal tp,BigDecimal entry,BigDecimal volume,BigDecimal floating,Long identifier,Integer reached,Integer protectedTarget,String closeReason){
@@ -47,7 +47,9 @@ import org.springframework.beans.factory.annotation.Value;
   e.worker=worker;e.status=status;if(order!=null)e.orderTicket=order;if(position!=null)e.positionTicket=position;if(sl!=null)e.brokerStopLoss=sl;if(tp!=null)e.brokerTakeProfit=tp;
   if(entry!=null)e.brokerEntryPrice=entry;if(volume!=null)e.volume=volume;if(floating!=null)e.floatingProfit=floating;if(identifier!=null)e.positionIdentifier=identifier;
   if(reached!=null)e.reachedTarget=Math.max(e.reachedTarget,reached);if(protectedTarget!=null)e.protectedTarget=Math.max(e.protectedTarget,protectedTarget);if(closeReason!=null)e.closeReason=closeReason;
-  e.message=message;e.updatedAt=Instant.now();if(changed)event(e);return e;
+  e.message=message;e.updatedAt=Instant.now();
+  if(status==BrokerExecution.Status.OPEN){var signal=signals.findById(id).orElse(null);if(signal!=null&&signal.pendingKind==AutoSignal.PendingKind.MARKET&&signal.status==AutoSignal.Status.PENDING){signal.activityActor="MT5_WORKER:"+worker;signal.status=AutoSignal.Status.ACTIVE;signal.activatedAt=e.updatedAt;signal.updatedAt=e.updatedAt;}}
+  if(changed)event(e);return e;
  }
  public List<Map<String,Object>> tracked(){
   return executions.findByStatusIn(List.of(BrokerExecution.Status.CLAIMED,BrokerExecution.Status.UNKNOWN,BrokerExecution.Status.BROKER_PENDING,BrokerExecution.Status.OPEN)).stream().filter(e->e.accountLogin==account&&server.equals(e.brokerServer)).map(e->{

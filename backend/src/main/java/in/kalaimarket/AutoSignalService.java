@@ -8,7 +8,10 @@ import org.springframework.http.HttpStatus;
 @Service public class AutoSignalService {
  private static final List<AutoSignal.Status> OPEN=List.of(AutoSignal.Status.PENDING,AutoSignal.Status.ACTIVE,AutoSignal.Status.TP1,AutoSignal.Status.TP2,AutoSignal.Status.TP3,AutoSignal.Status.TARGET);
  private final MarketQuoteRepository quotes;private final FeedLockRepository locks;private final AutoSignalRepository signals;private final ScanStateRepository scans;private final SignalStrategy strategy;
- public AutoSignalService(FeedLockRepository l,AutoSignalRepository s,ScanStateRepository f,SignalStrategy e,MarketQuoteRepository q){quotes=q;locks=l;signals=s;scans=f;strategy=e;}
+ private final boolean independent;
+ public AutoSignalService(FeedLockRepository l,AutoSignalRepository s,ScanStateRepository f,SignalStrategy e,MarketQuoteRepository q){this(l,s,f,e,q,false);}
+ @org.springframework.beans.factory.annotation.Autowired
+ public AutoSignalService(FeedLockRepository l,AutoSignalRepository s,ScanStateRepository f,SignalStrategy e,MarketQuoteRepository q,@org.springframework.beans.factory.annotation.Value("${KMR_PUBLIC_SIGNALS_ENABLED:true}")boolean independent){quotes=q;locks=l;signals=s;scans=f;strategy=e;this.independent=independent;}
  private void reject(String reason){throw new ResponseStatusException(HttpStatus.BAD_REQUEST,reason);}
  private void lock(String symbol){if(locks.lock(symbol).isEmpty())reject("Add symbol to watchlist first");}
  private void validateQuote(FeedRequest.Quote q,Instant now){
@@ -17,9 +20,9 @@ import org.springframework.http.HttpStatus;
  }
  private void observe(String symbol,FeedRequest.Quote q,Instant now){
   var old=quotes.findById(symbol).orElse(null);
-  if(old==null||q.time().isAfter(old.quotedAt)){var mq=new MarketQuote();mq.symbol=symbol;mq.bid=AutoSignal.price(q.bid());mq.ask=AutoSignal.price(q.ask());mq.quotedAt=q.time();quotes.save(mq);}
-  for(var s:signals.findBySymbolAndStatusIn(symbol,OPEN))if(!s.finalTargetReached())strategy.observe(s,q,now);
-  for(var state:scans.findBySymbol(symbol))if(state.lastQuoteAt==null||q.time().isAfter(state.lastQuoteAt)){state.lastQuoteAt=q.time();state.receivedAt=now;}
+  if(!independent&&(old==null||q.time().isAfter(old.quotedAt))){var mq=new MarketQuote();mq.symbol=symbol;mq.bid=AutoSignal.price(q.bid());mq.ask=AutoSignal.price(q.ask());mq.quotedAt=q.time();quotes.save(mq);}
+  for(var s:signals.findBySymbolAndStatusIn(symbol,OPEN))if(!s.finalTargetReached()&&!s.strategy.startsWith("KMR_V28")&&(!independent||!s.isManual()))strategy.observe(s,q,now);
+  if(!independent)for(var state:scans.findBySymbol(symbol))if(state.lastQuoteAt==null||q.time().isAfter(state.lastQuoteAt)){state.lastQuoteAt=q.time();state.receivedAt=now;}
  }
  @Transactional public Map<String,Object> ingest(FeedRequest r){
   if(!Timeframe.enabled().contains(r.timeframe()))reject("Timeframe is disabled; enabled: M1 M5 M15 M30 H1 D1 W1 MN1");
@@ -35,6 +38,7 @@ import org.springframework.http.HttpStatus;
   long maxAge=r.timeframe()==Timeframe.MN1?40L*86400:r.timeframe().seconds*2;
   if(last.isBefore(now.minusSeconds(maxAge)))reject("Latest candle is too old for this timeframe");
   observe(r.symbol(),r.quote(),now);
+  if(independent)return Map.of("status","EXECUTION_ONLY","reason","Signals are generated from public data by KMR v28; MT5 candles do not create signals");
   var a=strategy.analyze(r.candles(),r.quote());state.id=key;state.symbol=r.symbol();state.timeframe=r.timeframe();state.lastBar=last;state.lastScanAt=now;state.lastQuoteAt=r.quote().time();state.receivedAt=now;state.quality=a.quality();state.reason=a.reason();
   boolean alreadyOpen=signals.findBySymbolAndStatusIn(r.symbol(),OPEN).stream().anyMatch(s->!s.isManual()&&!s.finalTargetReached()&&s.timeframe==r.timeframe());
   if(a.direction()!=null&&!alreadyOpen&&!signals.existsBySymbolAndTimeframeAndSourceBar(r.symbol(),r.timeframe(),last)){

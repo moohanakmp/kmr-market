@@ -12,6 +12,6 @@ public record TradePlanView(Long id, String symbol, TradePlan.Direction directio
  BigDecimal brokerStopLoss, BigDecimal brokerTakeProfit,
  String strategy, java.util.List<BigDecimal> targets, AutoSignal.PendingKind pendingKind,
  BigDecimal brokerEntryPrice, BigDecimal volume, Integer reachedTarget, Integer protectedTarget, String closeReason, Instant brokerUpdatedAt) {
- public String getSource() {return sourceSignalId == null || "MANUAL_PENDING_V1".equals(strategy) ? "MANUAL" : "MT5";}
+ public String getSource() {return sourceSignalId == null || "MANUAL_PENDING_V1".equals(strategy) ? "MANUAL" : strategy!=null&&strategy.startsWith("KMR_V28")?"KMR PUBLIC":"MT5";}
  public BigDecimal getTp2() {return targets!=null&&targets.size()>1?targets.get(1):null;}
 }

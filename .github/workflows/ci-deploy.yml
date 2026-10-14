@@ -38,6 +38,8 @@ jobs:
           cache: maven
       - run: npm ci && npm run build
         working-directory: frontend
+      - name: Check unchanged v28 reference formulas
+        run: node scripts/verify-v28-engine.cjs
       - run: mvn -B verify
         working-directory: backend
       - name: Test MT5 feed and demo execution with offline broker
@@ -51,10 +53,14 @@ jobs:
           if ($parseErrors.Count) { throw ($parseErrors | Out-String) }
       - name: Test existing-signal plan migration
         run: bash scripts/test-plan-migration.sh
+      - name: Test signal channels and append-only lifecycle audit
+        run: bash scripts/test-signal-audit.sh
       - name: Build complete production container
         run: docker build -t kmr:ci .
       - name: Integration smoke test
         run: bash scripts/smoke-test.sh
+      - name: Independent public-data signals without MT5
+        run: bash scripts/public-signal-smoke.sh
       - name: Upload verified frontend
         uses: actions/upload-artifact@v4
         with:

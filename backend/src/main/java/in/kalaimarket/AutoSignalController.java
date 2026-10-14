@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import java.time.Instant;
 import java.util.*;
 @RestController public class AutoSignalController {
+ @org.springframework.beans.factory.annotation.Value("${KMR_PUBLIC_SIGNALS_ENABLED:true}") private boolean independent;
  private final AutoSignalService service;private final AutoSignalRepository signals;private final ScanStateRepository scans;private final WatchRepository watch;
  public AutoSignalController(AutoSignalService s,AutoSignalRepository r,ScanStateRepository f,WatchRepository w){service=s;signals=r;scans=f;watch=w;}
  @GetMapping("/api/feed/symbols") public List<String> symbols(){return watch.findAll(Sort.by("symbol")).stream().map(w->w.symbol).toList();}
@@ -13,6 +14,6 @@ import java.util.*;
  @PostMapping("/api/feed/quotes") public Map<String,String> quotes(@Valid @RequestBody FeedRequest.QuoteBatch r){service.quotes(r);return Map.of("status","ACCEPTED");}
  @GetMapping("/api/signals") public List<AutoSignal> signals(){return signals.findByTimeframeIn(Timeframe.enabled(),PageRequest.of(0,250,Sort.by("createdAt").descending()));}
  @GetMapping("/api/scanner") public Map<String,Object> scanner(){
-  return Map.of("strategy","EMA_BREAKOUT_V1","mode","OBSERVED_QUOTES","timeframes",Timeframe.enabled(),"serverTime",Instant.now(),"scans",scans.findAll(Sort.by("symbol","timeframe")).stream().filter(s->Timeframe.enabled().contains(s.timeframe)).toList());
+  return Map.of("strategy",independent?"KMR_V28_PUBLIC":"EMA_BREAKOUT_V1","mode",independent?"PUBLIC_SIGNALS_MT5_EXECUTION_ONLY":"OBSERVED_QUOTES","timeframes",Timeframe.enabled(),"serverTime",Instant.now(),"scans",scans.findAll(Sort.by("symbol","timeframe")).stream().filter(s->Timeframe.enabled().contains(s.timeframe)).toList());
  }
 }

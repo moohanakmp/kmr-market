@@ -1,3 +1,7 @@
+Signal history: [separate signal tables and full lifecycle audit](SIGNAL-AUDIT.md).
+
+> **Current signal source:** Read [PUBLIC_SIGNALS_V28.md](PUBLIC_SIGNALS_V28.md). The default source is now public market data using the attached v28 engine. MT5 is used only for executing and reconciling orders; older MT5-feed instructions below describe compatibility mode.
+
 # KMR Market 1.0
 
 Java 21 / Spring Boot 3.5.6, React 19 / TypeScript / Vite, PostgreSQL 17/18.

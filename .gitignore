@@ -12,3 +12,5 @@ backups/
 __pycache__/
 *.pyc
 bridge/symbol-map.json
+
+*.tsbuildinfo

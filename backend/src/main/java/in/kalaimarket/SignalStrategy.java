@@ -39,6 +39,11 @@ import org.springframework.stereotype.Component;
   boolean buy=s.direction==TradePlan.Direction.BUY;double enter=buy?q.ask():q.bid(),exit=buy?q.bid():q.ask();
   if(s.status==AutoSignal.Status.PENDING){
    if(!now.isBefore(s.expiresAt)){s.status=AutoSignal.Status.EXPIRED;}
+   else if(s.pendingKind==AutoSignal.PendingKind.MARKET){
+    // A reference-price observation is not a broker fill. Wait for the execution report.
+    if(buy?exit>=s.tp1.doubleValue():exit<=s.tp1.doubleValue())s.status=AutoSignal.Status.MISSED;
+    else if(buy?exit<=s.stopLoss.doubleValue():exit>=s.stopLoss.doubleValue())s.status=AutoSignal.Status.STOPPED;
+   }
    else if(s.pendingKind==AutoSignal.PendingKind.LIMIT?(buy?enter<=s.entry.doubleValue():enter>=s.entry.doubleValue()):(buy?enter>=s.entry.doubleValue():enter<=s.entry.doubleValue())){
     // A sampled quote beyond TP1 is a missed entry, never a fabricated immediate TP.
     if(buy?exit>=s.tp1.doubleValue():exit<=s.tp1.doubleValue())s.status=AutoSignal.Status.MISSED;
