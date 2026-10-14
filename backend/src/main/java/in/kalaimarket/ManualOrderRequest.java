@@ -6,7 +6,8 @@ public record ManualOrderRequest(@NotNull UUID requestKey,@Positive Long planId,
  @NotNull @DecimalMin(value="0",inclusive=false) @Digits(integer=12,fraction=8) BigDecimal entry,
  @NotNull @DecimalMin(value="0",inclusive=false) @Digits(integer=12,fraction=8) BigDecimal stopLoss,
  @NotNull @Size(min=1,max=10) List<@NotNull @DecimalMin(value="0",inclusive=false) @Digits(integer=12,fraction=8) BigDecimal> targets,
- @NotNull @Future Instant expiresAt){
+ @NotNull @Future Instant expiresAt,@Size(max=1000) String decisionReason){
+ public ManualOrderRequest(UUID requestKey,Long planId,String symbol,TradePlan.Direction direction,Timeframe timeframe,AutoSignal.PendingKind pendingKind,BigDecimal entry,BigDecimal stopLoss,List<BigDecimal> targets,Instant expiresAt){this(requestKey,planId,symbol,direction,timeframe,pendingKind,entry,stopLoss,targets,expiresAt,null);}
  public boolean validLevels(){
   boolean buy=direction==TradePlan.Direction.BUY;if(buy?stopLoss.compareTo(entry)>=0:stopLoss.compareTo(entry)<=0)return false;
   var prior=entry;for(var t:targets){if(buy?t.compareTo(prior)<=0:t.compareTo(prior)>=0)return false;prior=t;}return true;

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export KMR_PUBLIC_SIGNALS_ENABLED=false
 export DB_PASSWORD=ci-only-password ADMIN_PASSWORD=ci-admin-password-long MT5_FEED_PASSWORD=ci-feed-password-long MT5_DEMO_ACCOUNT=123456
 # Reproduce Neon: non-empty public schema, no Flyway history, limited app role.
 PGPASSWORD=ci-only-password psql -h localhost -U kmr -d kmr -v ON_ERROR_STOP=1 <<'SQL'
@@ -11,7 +12,7 @@ CREATE SCHEMA kmr;
 GRANT USAGE, CREATE ON SCHEMA kmr TO kmr_ci;
 SQL
 # GitHub service PostgreSQL is reachable on the Linux host network.
-docker run -d --name kmr-test --network host -e JDBC_DATABASE_URL=jdbc:postgresql://localhost:5432/kmr -e DB_USERNAME=kmr_ci -e DB_SCHEMA=kmr -e DB_PASSWORD -e ADMIN_PASSWORD -e MT5_FEED_PASSWORD -e MT5_DEMO_ACCOUNT kmr:ci >/dev/null
+docker run -d --name kmr-test --network host -e JDBC_DATABASE_URL=jdbc:postgresql://localhost:5432/kmr -e DB_USERNAME=kmr_ci -e DB_SCHEMA=kmr -e DB_PASSWORD -e ADMIN_PASSWORD -e MT5_FEED_PASSWORD -e MT5_DEMO_ACCOUNT -e KMR_PUBLIC_SIGNALS_ENABLED kmr:ci >/dev/null
 trap 'docker logs kmr-test; docker rm -f kmr-test >/dev/null' EXIT
 ready=false
 for attempt in $(seq 1 60); do

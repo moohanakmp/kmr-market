@@ -10,6 +10,13 @@ import org.hibernate.type.SqlTypes;
  @Id @GeneratedValue(strategy=GenerationType.IDENTITY) public Long id;
  @Version public long version;
  @Column(name="execution_note") public String executionNote;
+ @Column(name="created_by",updatable=false) public String createdBy;
+ @Column(name="initiated_by",updatable=false) public String initiatedBy;
+ @Column(name="updated_by") public String updatedBy;
+ @JdbcTypeCode(SqlTypes.JSON) @Column(name="decision_context",columnDefinition="jsonb") public Map<String,Object> decisionContext=new LinkedHashMap<>();
+ @PrePersist public void stampCreation(){initiatedBy=SignalActor.current();createdBy=isManual()?initiatedBy:"SYSTEM:"+strategy;updatedBy=createdBy;}
+ @Transient public String activityActor;
+ @PreUpdate public void stampUpdate(){updatedBy=activityActor==null?SignalActor.current():activityActor;}
  public String symbol;
  @Enumerated(EnumType.STRING) public Timeframe timeframe;
  @Enumerated(EnumType.STRING) public TradePlan.Direction direction;
@@ -19,6 +26,7 @@ import org.hibernate.type.SqlTypes;
  @Column(precision=20,scale=8) public BigDecimal tp1;
  @Column(precision=20,scale=8) public BigDecimal tp2;
  public int quality;
+ @Column(name="source_atr") public Double sourceAtr;
  public String reason;
  public String strategy="EMA_BREAKOUT_V1";
  @Column(name="source_bar") public Instant sourceBar;
@@ -34,7 +42,7 @@ import org.hibernate.type.SqlTypes;
  @Column(name="manual_plan_id") public Long manualPlanId;
  @Column(name="cancel_requested") public boolean cancelRequested;
  @Column(name="reached_target") public int reachedTarget;
- public enum PendingKind {STOP,LIMIT}
+ public enum PendingKind {STOP,LIMIT,MARKET}
  public enum Status {PENDING, ACTIVE, TP1, TP2, TP3, TARGET, STOPPED, MISSED, EXPIRED, CANCELLED}
  public List<BigDecimal> getTargets(){return targets==null||targets.isEmpty()?List.of(tp1,tp2):targets;}
  public boolean finalTargetReached(){return reachedTarget>=getTargets().size();}

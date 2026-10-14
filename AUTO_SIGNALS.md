@@ -1,3 +1,5 @@
+> **Current signal source:** Read [PUBLIC_SIGNALS_V28.md](PUBLIC_SIGNALS_V28.md). The older EMA/MT5 strategy below remains only in compatibility mode (KMR_PUBLIC_SIGNALS_ENABLED=false).
+
 # KMR MT5 auto signals
 
 This update adds a read-only MT5 market-data bridge and a Java signal engine.

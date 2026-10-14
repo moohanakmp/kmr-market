@@ -1,7 +1,8 @@
 param(
     [switch]$Setup,
     [switch]$InstallStartup,
-    [switch]$Stop
+    [switch]$Stop,
+    [switch]$LegacyFeed
 )
 $ErrorActionPreference = 'Stop'
 if ($env:OS -ne 'Windows_NT') { throw 'Run this launcher in Windows PowerShell on your MT5 laptop.' }
@@ -84,11 +85,11 @@ try {
     $env:MT5_FEED_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)
     $python = Join-Path $config.project '.venv-mt5\Scripts\python.exe'
     if (-not (Test-Path $python)) { throw 'Configured Python environment is missing; rerun setup from the correct project folder.' }
-    Write-Host 'Starting DEMO data feed, execution and P&L sync. No broker password is sent to KMR.'
+    Write-Host 'Starting DEMO execution and P&L sync. KMR public data generates signals independently.'
     while ($true) {
         $terminalRunning = @(Get-Process terminal64 -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $config.terminal })
         if ($terminalRunning.Count -eq 0) { Start-Process -FilePath $config.terminal | Out-Null; Start-Sleep -Seconds 10 }
-        foreach ($name in @('mt5_bridge', 'mt5_executor')) {
+        foreach ($name in $(if ($LegacyFeed) { @('mt5_bridge', 'mt5_executor') } else { @('mt5_executor') })) {
             if (-not $children[$name] -or $children[$name].HasExited) {
                 $workerScript = Join-Path $config.project "bridge\$name.py"
                 $arguments = @('-u', "`"$workerScript`"", '--url', $config.url, '--broker-utc-offset-hours', [string]$config.offset, '--terminal', "`"$($config.terminal)`"")

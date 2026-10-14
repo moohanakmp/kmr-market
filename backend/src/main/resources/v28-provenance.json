@@ -1,0 +1,27 @@
+{
+  "inputSha256": "295663fa3e3d6f081ceda6b5c5ad3c4274f956c1d3879c7fa6981faacff3ffee",
+  "functions": {
+    "ema": "345e274d5008aa6b2a70974e2fa2d549924dd3a8bc639ac372d78fbe1ea6addc",
+    "rsi": "503cf685aa8e0a2a14d6a1492bf4112cb03e03eabf1e8ea044a9db03d94d954c",
+    "atr": "e4d27170b14ef5ebda09e984f48850d1a98dd03ce82d9befaf8b7d6028949b6f",
+    "swingLevels": "554093a27916733c68adae20e417c5f0b09293ac4734111128dfbe27cbd4d597",
+    "emaSeries": "b8577bedd3cb66cc93f3eede2c13d17e9d2130c26a18b55556185fb9852e7b32",
+    "macd": "c58c32faa5285290ad395a446e0f2f21be93713ee790261d05e808993cdb82cd",
+    "kmrAdx": "0641fa7999109bc31f823375e2e71162a114218b970cd14a4206b77388a1e7ac",
+    "kmrPivots": "d8ec0f15e85f5e636df1c291b9930a2b14c28a9d6031ce2d0cad5d56513f2c6d",
+    "kmrStructure": "655071ce8d1bf0195623930d77985dbd55df626fcebf7e240cc8146ddba1e954",
+    "kmrVolumePressure": "0a6ac9f799f50677447b34c1207a198c46396e6c9a212f3d687166c01109baad",
+    "kmrSweep": "7d223f399b00fadd698045a9cfa2038a8896577ba0b8ba1e2091974d5f9ac09c",
+    "kmrTfBias": "2e02e984ea630449ecac8796212103c457ed1e885e96e77c08214053e9e0501e",
+    "kmrSmartScan": "781ed3709203b66bb8210035f5e934512aec427611cefac19fd91c2a9aa25caa",
+    "ev2txt": "da95c16bd8fc411a313f9dab85952bf50d402e0f6e263ba003b937d0167c8d56",
+    "kmrTradePlan": "cdc138640ca23972bd96f6f9f1a851b21bc1c1df7d44150e7af65c31d9867f94",
+    "bbAt": "e5e7715a687bee0a11e33ae3e574014bfcba6a8a0093657fd27fb321e56ccd13",
+    "scalpScan": "41c8eeb4665fef858b6e95a78307f70b0318ec72d6204be156023f22a506b257",
+    "scalpLevels": "208bc15ed7ec0b71f63a18f8d0169d23899708f8c621d697c1fdb62b36c1938a",
+    "orderBlocks": "cac05a34624f09c06bf4ff7a1a5b8e75ebc0d43cdfe19890867bc9791a22875b",
+    "kmrIstHour": "7fa9d60a7c2f49663fb2647e6381266b64674748dfe01d06ecbe50ffabfdcb6c"
+  },
+  "input": "User attachment kmr-netlify-deploy-v28.zip/index.html",
+  "notes": "No login code, hardcoded users, notifications or UI boot code copied."
+}
